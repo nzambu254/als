@@ -2,7 +2,7 @@
   <div class="layout">
     <SideBar role="admin" />
     <div class="content">
-      <h1>Welcome to Admin Dashboard</h1>
+      <h1>Admin Dashboard</h1>
     </div>
   </div>
 </template>
