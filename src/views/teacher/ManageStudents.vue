@@ -1,11 +1,11 @@
 <template>
   <div class="manage-students-container">
     <h2>Manage Students</h2>
-    
+
     <div class="student-controls">
       <div class="search-bar">
-        <input v-model="searchQuery" placeholder="Search students...">
-        <button @click="refreshStudents">
+        <input v-model="searchQuery" placeholder="Search students..." />
+        <button @click="fetchStudents">
           <i class="refresh-icon">↻</i> Refresh
         </button>
       </div>
@@ -18,7 +18,7 @@
         </select>
       </div>
     </div>
-    
+
     <div class="student-list">
       <table>
         <thead>
@@ -51,7 +51,7 @@
         </tbody>
       </table>
     </div>
-    
+
     <div v-if="loading" class="loading">Loading student data...</div>
     <div v-if="error" class="error">{{ error }}</div>
     <div v-if="filteredStudents.length === 0 && !loading" class="empty-state">
@@ -61,7 +61,18 @@
 </template>
 
 <script>
-import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
+import {
+  collection,
+  doc,
+  getDocs,
+  getDoc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  query,
+  where,
+  orderBy
+} from 'firebase/firestore';
 import { db } from '@/firebase';
 
 export default {
@@ -93,47 +104,62 @@ export default {
     async fetchStudents() {
       this.loading = true;
       this.error = '';
-      
       try {
-        // In a real app, you would query only students assigned to this teacher
-        const querySnapshot = await getDocs(collection(db, 'users'));
-        const studentPromises = querySnapshot.docs
-          .filter(doc => doc.data().role === 'student')
-          .map(async doc => {
-            const studentData = doc.data();
-            // Get progress data
-            const progressDoc = await getDoc(doc(db, 'progress', doc.id));
-            const progressData = progressDoc.exists() ? progressDoc.data() : {};
-            
-            return {
-              id: doc.id,
-              name: studentData.name || studentData.email.split('@')[0],
-              email: studentData.email,
-              class: studentData.class || '',
-              progress: progressData.overallProgress || 0
-            };
-          });
-        
+        const q = query(
+          collection(db, 'users'),
+          where('role', '==', 'student'),
+          orderBy('name')
+        );
+        const querySnapshot = await getDocs(q);
+
+        const studentPromises = querySnapshot.docs.map(async docSnap => {
+          const studentData = docSnap.data();
+          const progressDoc = await getDoc(doc(db, 'progress', docSnap.id));
+          const progressData = progressDoc.exists() ? progressDoc.data() : {};
+          return {
+            id: docSnap.id,
+            name: studentData.name || studentData.email.split('@')[0],
+            email: studentData.email,
+            class: studentData.class || '',
+            progress: progressData.overallProgress || 0
+          };
+        });
+
         this.students = await Promise.all(studentPromises);
-      } catch (err) {
+      } catch (error) {
         this.error = 'Failed to load student data. Please try again later.';
-        console.error(err);
+        console.error('Error fetching students:', error);
       } finally {
         this.loading = false;
       }
     },
-    refreshStudents() {
-      this.fetchStudents();
+    async updateStudent(studentId, updateData) {
+      try {
+        const studentRef = doc(db, 'users', studentId);
+        await updateDoc(studentRef, updateData);
+        console.log('Student updated successfully');
+        await this.fetchStudents();
+      } catch (error) {
+        console.error('Error updating student:', error);
+      }
+    },
+    async deleteStudent(studentId) {
+      try {
+        await deleteDoc(doc(db, 'users', studentId));
+        console.log('Student deleted successfully');
+        await this.fetchStudents();
+      } catch (error) {
+        console.error('Error deleting student:', error);
+      }
     },
     viewStudent(studentId) {
       this.$router.push(`/teacher/students/${studentId}`);
     },
     messageStudent(studentId) {
-      // Implement messaging functionality
       console.log('Message student:', studentId);
     }
   }
-}
+};
 </script>
 
 <style scoped>

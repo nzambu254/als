@@ -16,9 +16,27 @@
               </defs>
             </svg>
           </div>
-          <h1>Welcome Back</h1>
-          <p>Sign in to your account</p>
+          <h1>{{ isLoginMode ? 'Welcome Back' : 'Create Account' }}</h1>
+          <p>{{ isLoginMode ? 'Sign in to your account' : 'Join our platform today' }}</p>
         </div>
+      </div>
+
+      <!-- Mode Toggle -->
+      <div class="mode-toggle">
+        <button 
+          @click="toggleMode" 
+          class="toggle-btn"
+          :class="{ 'active': isLoginMode }"
+        >
+          Sign In
+        </button>
+        <button 
+          @click="toggleMode" 
+          class="toggle-btn"
+          :class="{ 'active': !isLoginMode }"
+        >
+          Sign Up
+        </button>
       </div>
 
       <!-- Error Message -->
@@ -30,17 +48,17 @@
       </div>
 
       <!-- Success Message -->
-      <div v-if="resetEmailSent" class="alert alert-success">
+      <div v-if="successMessage" class="alert alert-success">
         <svg class="alert-icon" width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
         </svg>
-        Password reset email sent. Please check your inbox.
+        {{ successMessage }}
       </div>
 
       <!-- Login Form -->
-      <form @submit.prevent="handleLogin" class="login-form">
+      <form v-if="isLoginMode" @submit.prevent="handleLogin" class="auth-form">
         <div class="form-group">
-          <label for="email" class="form-label">
+          <label for="loginEmail" class="form-label">
             <svg class="label-icon" width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
               <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
               <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
@@ -50,18 +68,18 @@
           <div class="input-wrapper">
             <input 
               type="email" 
-              id="email" 
-              v-model="email" 
+              id="loginEmail" 
+              v-model="loginData.email" 
               required
               class="form-input"
               placeholder="Enter your email"
-              :class="{ 'input-error': error && !email }"
+              :class="{ 'input-error': error && !loginData.email }"
             >
           </div>
         </div>
 
         <div class="form-group">
-          <label for="password" class="form-label">
+          <label for="loginPassword" class="form-label">
             <svg class="label-icon" width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
               <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
             </svg>
@@ -70,12 +88,12 @@
           <div class="input-wrapper">
             <input 
               :type="showPassword ? 'text' : 'password'" 
-              id="password" 
-              v-model="password" 
+              id="loginPassword" 
+              v-model="loginData.password" 
               required
               class="form-input"
               placeholder="Enter your password"
-              :class="{ 'input-error': error && !password }"
+              :class="{ 'input-error': error && !loginData.password }"
             >
             <button 
               type="button" 
@@ -107,6 +125,150 @@
           </div>
         </div>
       </form>
+
+      <!-- Register Form -->
+      <form v-else @submit.prevent="handleRegister" class="auth-form">
+        <div class="form-group">
+          <label for="registerName" class="form-label">
+            <svg class="label-icon" width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" />
+            </svg>
+            Full Name
+          </label>
+          <div class="input-wrapper">
+            <input 
+              type="text" 
+              id="registerName" 
+              v-model="registerData.name" 
+              required
+              class="form-input"
+              placeholder="Enter your full name"
+              :class="{ 'input-error': error && !registerData.name }"
+            >
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="registerEmail" class="form-label">
+            <svg class="label-icon" width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
+              <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
+            </svg>
+            Email Address
+          </label>
+          <div class="input-wrapper">
+            <input 
+              type="email" 
+              id="registerEmail" 
+              v-model="registerData.email" 
+              required
+              class="form-input"
+              placeholder="Enter your email"
+              :class="{ 'input-error': error && !registerData.email }"
+            >
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="role" class="form-label">
+            <svg class="label-icon" width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z"/>
+              <path d="M6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"/>
+            </svg>
+            Role
+          </label>
+          <div class="input-wrapper">
+            <select 
+              id="role" 
+              v-model="registerData.role" 
+              required
+              class="form-input form-select"
+              :class="{ 'input-error': error && !registerData.role }"
+            >
+              <option value="">Select your role</option>
+              <option value="student">Student</option>
+              <option value="teacher">Teacher</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="registerPassword" class="form-label">
+            <svg class="label-icon" width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
+            </svg>
+            Password
+          </label>
+          <div class="input-wrapper">
+            <input 
+              :type="showPassword ? 'text' : 'password'" 
+              id="registerPassword" 
+              v-model="registerData.password" 
+              required
+              minlength="6"
+              class="form-input"
+              placeholder="Enter your password"
+              :class="{ 'input-error': error && !registerData.password }"
+            >
+            <button 
+              type="button" 
+              class="password-toggle"
+              @click="showPassword = !showPassword"
+            >
+              <svg v-if="!showPassword" width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd" />
+              </svg>
+              <svg v-else width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clip-rule="evenodd" />
+                <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="confirmPassword" class="form-label">
+            <svg class="label-icon" width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
+            </svg>
+            Confirm Password
+          </label>
+          <div class="input-wrapper">
+            <input 
+              :type="showConfirmPassword ? 'text' : 'password'" 
+              id="confirmPassword" 
+              v-model="registerData.confirmPassword" 
+              required
+              class="form-input"
+              placeholder="Confirm your password"
+              :class="{ 'input-error': error && !registerData.confirmPassword }"
+            >
+            <button 
+              type="button" 
+              class="password-toggle"
+              @click="showConfirmPassword = !showConfirmPassword"
+            >
+              <svg v-if="!showConfirmPassword" width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd" />
+              </svg>
+              <svg v-else width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clip-rule="evenodd" />
+                <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" :disabled="loading" class="btn-primary">
+            <span v-if="loading" class="loading-spinner"></span>
+            {{ loading ? 'Creating Account...' : 'Create Account' }}
+          </button>
+        </div>
+      </form>
     </div>
 
     <!-- Background decoration -->
@@ -119,118 +281,203 @@
 </template>
 
 <script>
-import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
-import { auth } from '@/firebase';
+import { 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  sendPasswordResetEmail 
+} from 'firebase/auth';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { auth, db } from '@/firebase';
 
 export default {
   name: 'LoginView',
   data() {
     return {
-      email: '',
-      password: '',
-      error: '',
+      isLoginMode: true,
       loading: false,
-      resetEmailSent: false,
+      error: '',
+      successMessage: '',
       showPassword: false,
-      // Define hardcoded credentials
-      adminCredentials: {
-        email: 'tabithalomuke@gmail.com',
-        password: '1234567'
+      showConfirmPassword: false,
+      loginData: {
+        email: '',
+        password: ''
+      },
+      registerData: {
+        name: '',
+        email: '',
+        role: '',
+        password: '',
+        confirmPassword: ''
       }
     }
   },
   methods: {
+    toggleMode() {
+      this.isLoginMode = !this.isLoginMode;
+      this.clearMessages();
+      this.resetForms();
+    },
+
+    clearMessages() {
+      this.error = '';
+      this.successMessage = '';
+    },
+
+    resetForms() {
+      this.loginData = {
+        email: '',
+        password: ''
+      };
+      this.registerData = {
+        name: '',
+        email: '',
+        role: '',
+        password: '',
+        confirmPassword: ''
+      };
+      this.showPassword = false;
+      this.showConfirmPassword = false;
+    },
+
     async handleLogin() {
       this.loading = true;
-      this.error = '';
-      this.resetEmailSent = false;
+      this.clearMessages();
 
       try {
-        // Check for hardcoded admin credentials first
-        if (this.isHardcodedAdmin()) {
-          await this.handleHardcodedAdmin();
-          return;
+        // Authenticate with Firebase
+        const userCredential = await signInWithEmailAndPassword(
+          auth, 
+          this.loginData.email, 
+          this.loginData.password
+        );
+        
+        const user = userCredential.user;
+        
+        // Get user role from Firestore
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        
+        if (!userDoc.exists()) {
+          throw new Error('User profile not found. Please contact support.');
         }
-
-        // Regular Firebase authentication for other users
-        await this.handleFirebaseAuth();
+        
+        const userData = userDoc.data();
+        const userRole = userData.role;
+        
+        // Redirect based on role
+        this.redirectUserByRole(userRole);
         
       } catch (err) {
         console.error('Login error:', err);
-        this.error = this.getErrorMessage(err.code || 'auth/unknown');
+        this.error = this.getErrorMessage(err.code || err.message || 'auth/unknown');
       } finally {
         this.loading = false;
       }
     },
 
-    isHardcodedAdmin() {
-      return this.email === this.adminCredentials.email && 
-             this.password === this.adminCredentials.password;
+    async handleRegister() {
+      this.loading = true;
+      this.clearMessages();
+
+      try {
+        // Validate form data
+        this.validateRegistrationData();
+        
+        // Create user account
+        const userCredential = await createUserWithEmailAndPassword(
+          auth,
+          this.registerData.email,
+          this.registerData.password
+        );
+        
+        const user = userCredential.user;
+        
+        // Save user data to Firestore
+        await setDoc(doc(db, 'users', user.uid), {
+          uid: user.uid,
+          name: this.registerData.name.trim(),
+          email: this.registerData.email.toLowerCase(),
+          role: this.registerData.role,
+          createdAt: new Date().toISOString(),
+          isActive: true
+        });
+        
+        this.successMessage = 'Account created successfully! Please sign in to continue.';
+        
+        // Auto-switch to login mode after 2 seconds
+        setTimeout(() => {
+          this.isLoginMode = true;
+          this.clearMessages();
+          this.resetForms();
+          // Pre-fill email for convenience
+          this.loginData.email = this.registerData.email;
+        }, 2000);
+        
+      } catch (err) {
+        console.error('Registration error:', err);
+        this.error = this.getErrorMessage(err.code || err.message || 'auth/unknown');
+      } finally {
+        this.loading = false;
+      }
     },
 
-    async handleHardcodedAdmin() {
-      try {
-        // Try Firebase auth first for consistency
-        await signInWithEmailAndPassword(auth, this.email, this.password);
-        console.log('Admin authenticated via Firebase');
-      } catch (firebaseError) {
-        console.log('Firebase auth failed for admin, using hardcoded credentials');
-        // Create a mock user session for hardcoded admin
-        this.createMockAdminSession();
+    validateRegistrationData() {
+      const { name, email, role, password, confirmPassword } = this.registerData;
+      
+      if (!name.trim()) {
+        throw new Error('Please enter your full name');
       }
       
-      // Navigate to admin dashboard
-      this.$router.push('/admin');
-      this.loading = false;
-    },
-
-    createMockAdminSession() {
-      // Store admin session info in sessionStorage or Vuex store
-      // This is a temporary solution - ideally you'd create this user in Firebase
-      const adminSession = {
-        email: this.adminCredentials.email,
-        role: 'admin',
-        isHardcoded: true,
-        loginTime: new Date().toISOString()
-      };
+      if (name.trim().length < 2) {
+        throw new Error('Name must be at least 2 characters long');
+      }
       
-      // Store in sessionStorage (will be cleared when browser closes)
-      sessionStorage.setItem('adminSession', JSON.stringify(adminSession));
+      if (!email.trim()) {
+        throw new Error('Please enter your email address');
+      }
       
-      // You might also want to emit an event or update a global state
-      this.$emit('admin-login', adminSession);
-    },
-
-    async handleFirebaseAuth() {
-      const userCredential = await signInWithEmailAndPassword(auth, this.email, this.password);
-      const user = userCredential.user;
+      if (!role) {
+        throw new Error('Please select your role');
+      }
       
-      // Determine user role and redirect
-      const userRole = this.getUserRole(user.email);
-      this.$router.push(`/${userRole}`);
-      this.loading = false;
+      if (!password) {
+        throw new Error('Please enter a password');
+      }
+      
+      if (password.length < 6) {
+        throw new Error('Password must be at least 6 characters long');
+      }
+      
+      if (password !== confirmPassword) {
+        throw new Error('Passwords do not match');
+      }
     },
 
     async resetPassword() {
-      if (!this.email) {
+      if (!this.loginData.email) {
         this.error = 'Please enter your email address first';
         return;
       }
       
-      // Don't allow password reset for hardcoded admin
-      if (this.email === this.adminCredentials.email) {
-        this.error = 'Please contact system administrator for password reset';
-        return;
-      }
-      
       try {
-        await sendPasswordResetEmail(auth, this.email);
-        this.resetEmailSent = true;
+        await sendPasswordResetEmail(auth, this.loginData.email);
+        this.successMessage = 'Password reset email sent. Please check your inbox.';
         this.error = '';
       } catch (err) {
         console.error('Password reset error:', err);
         this.error = this.getErrorMessage(err.code);
       }
+    },
+
+    redirectUserByRole(role) {
+      const roleRoutes = {
+        admin: '/admin',
+        teacher: '/teacher',
+        student: '/student'
+      };
+      
+      const route = roleRoutes[role] || '/student'; // Default to student if role not found
+      this.$router.push(route);
     },
 
     getErrorMessage(code) {
@@ -245,24 +492,14 @@ export default {
         'auth/missing-password': 'Please enter your password',
         'auth/weak-password': 'Password should be at least 6 characters',
         'auth/email-already-in-use': 'Email is already registered',
+        'auth/operation-not-allowed': 'Email/password accounts are not enabled',
         'auth/unknown': 'An unexpected error occurred. Please try again'
       };
       
-      return errorMessages[code] || 'Login failed. Please try again';
-    },
-
-    getUserRole(email) {
-      // Check hardcoded admin first
-      if (email === this.adminCredentials.email) return 'admin';
-      
-      // Check other role patterns
-      if (email.includes('@admin.')) return 'admin';
-      if (email.includes('@teacher.')) return 'teacher';
-      return 'student';
+      return errorMessages[code] || code || 'An error occurred. Please try again';
     }
   },
 
-  // Clean up any auth listeners when component is destroyed
   beforeUnmount() {
     this.loading = false;
   }
@@ -291,7 +528,7 @@ export default {
   border-radius: 24px;
   padding: 40px;
   width: 100%;
-  max-width: 440px;
+  max-width: 480px;
   box-shadow: 
     0 20px 25px -5px rgba(0, 0, 0, 0.1),
     0 10px 10px -5px rgba(0, 0, 0, 0.04);
@@ -314,7 +551,7 @@ export default {
 
 .login-header {
   text-align: center;
-  margin-bottom: 32px;
+  margin-bottom: 24px;
 }
 
 .logo-section {
@@ -346,6 +583,34 @@ export default {
   color: #6b7280;
   margin: 0;
   font-weight: 400;
+}
+
+.mode-toggle {
+  display: flex;
+  background-color: #f3f4f6;
+  border-radius: 12px;
+  padding: 4px;
+  margin-bottom: 24px;
+  gap: 4px;
+}
+
+.toggle-btn {
+  flex: 1;
+  padding: 12px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: transparent;
+  color: #6b7280;
+}
+
+.toggle-btn.active {
+  background: white;
+  color: #1f2937;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .alert {
@@ -387,10 +652,10 @@ export default {
   flex-shrink: 0;
 }
 
-.login-form {
+.auth-form {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 20px;
 }
 
 .form-group {

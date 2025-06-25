@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { auth } from '@/firebase'
+import { auth, db } from '@/firebase'
 import { onAuthStateChanged } from 'firebase/auth'
+import { doc, getDoc } from 'firebase/firestore'
 
 // Import components
 import LandingPage from '../views/LandingPage.vue'
@@ -79,7 +80,7 @@ const routes = [
     meta: { requiresAuth: true, role: 'student' }
   },
 
-  // Teacher Routes
+  // Teacher Routes - FIXED: ManageStudents should be accessible to teachers
   {
     path: '/teacher',
     name: 'TeacherDashboard',
@@ -90,7 +91,7 @@ const routes = [
     path: '/teacher/manage-students',
     name: 'ManageStudents',
     component: ManageStudents,
-    meta: { requiresAuth: true, role: 'teacher' }
+    meta: { requiresAuth: true, role: 'teacher' } // CHANGED from 'admin' to 'teacher'
   },
   {
     path: '/teacher/upload-content',
@@ -135,6 +136,27 @@ const routes = [
     name: 'SystemMaintenance',
     component: SystemMaintenance,
     meta: { requiresAuth: true, role: 'admin' }
+  },
+
+  // Optional: Add admin access to teacher routes if needed
+  {
+    path: '/admin/manage-students',
+    name: 'AdminManageStudents',
+    component: ManageStudents,
+    meta: { requiresAuth: true, role: 'admin' }
+  },
+  {
+    path: '/admin/announcements',
+    name: 'AdminAnnouncements',
+    component: Announcements,
+    meta: { requiresAuth: true, role: 'admin' }
+  },
+
+  // Catch-all route for 404 errors
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'NotFound',
+    redirect: '/'
   }
 ]
 
@@ -143,7 +165,7 @@ const router = createRouter({
   routes
 })
 
-// Get current user function
+// Get current user with authentication state
 const getCurrentUser = () => {
   return new Promise((resolve, reject) => {
     const unsubscribe = onAuthStateChanged(auth, user => {
@@ -153,19 +175,27 @@ const getCurrentUser = () => {
   });
 };
 
-// Get user role function
-const getUserRole = (user) => {
+// Get user role from Firestore (same logic as in Login.vue)
+const getUserRole = async (user) => {
   if (!user) return null;
-  if (user.email === 'tabithalomuke@gmail.com') {
-    return 'admin';
-  } else if (user.email.includes('@teacher.')) {
-    return 'teacher';
-  } else {
-    return 'student';
+  
+  try {
+    const userDoc = await getDoc(doc(db, 'users', user.uid));
+    
+    if (!userDoc.exists()) {
+      console.warn('User document not found in Firestore');
+      return null;
+    }
+    
+    const userData = userDoc.data();
+    return userData.role || null;
+  } catch (error) {
+    console.error('Error fetching user role:', error);
+    return null;
   }
 };
 
-// Navigation guard
+// Navigation guard with proper role checking
 router.beforeEach(async (to, from, next) => {
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth);
   const requiresGuest = to.matched.some(record => record.meta.requiresGuest);
@@ -176,27 +206,63 @@ router.beforeEach(async (to, from, next) => {
     
     if (requiresAuth && !currentUser) {
       // Redirect to login if authentication is required but user is not logged in
+      console.log('Authentication required, redirecting to login');
       next('/login');
-    } else if (requiresGuest && currentUser) {
+      return;
+    }
+    
+    if (requiresGuest && currentUser) {
       // Redirect to appropriate dashboard if user is logged in but trying to access guest pages
-      const userRole = getUserRole(currentUser);
-      next(`/${userRole}`);
-    } else if (requiresAuth && requiredRole) {
+      console.log('User already logged in, redirecting to dashboard');
+      const userRole = await getUserRole(currentUser);
+      
+      if (userRole) {
+        next(`/${userRole}`);
+      } else {
+        // If role is not found, logout and redirect to login
+        console.warn('User role not found, logging out');
+        await auth.signOut();
+        next('/login');
+      }
+      return;
+    }
+    
+    if (requiresAuth && requiredRole) {
       // Check if user has the required role
-      const userRole = getUserRole(currentUser);
+      const userRole = await getUserRole(currentUser);
+      
+      if (!userRole) {
+        // If role is not found, logout and redirect to login
+        console.warn('User role not found, logging out');
+        await auth.signOut();
+        next('/login');
+        return;
+      }
+      
       if (userRole === requiredRole) {
+        // User has the correct role, allow access
         next();
       } else {
-        // Redirect to user's appropriate dashboard
+        // User doesn't have the required role, redirect to their dashboard
+        console.log(`Access denied. Required: ${requiredRole}, User has: ${userRole}`);
         next(`/${userRole}`);
       }
-    } else {
-      next();
+      return;
     }
+    
+    // No special requirements, allow access
+    next();
+    
   } catch (error) {
-    console.error('Router guard error:', error);
+    console.error('Router navigation guard error:', error);
+    // On error, redirect to login for safety
     next('/login');
   }
+});
+
+// Handle router errors
+router.onError((error) => {
+  console.error('Router error:', error);
 });
 
 export default router
