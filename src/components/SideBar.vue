@@ -52,7 +52,7 @@ export default {
       } else if (this.role === 'student') {
         return [
           ...baseLinks,
-          { name: 'Tutorials', route: '/student/tutorials' },
+          { name: 'View Content', route: '/student/view-content' },
           { name: 'Practice & Quizzes', route: '/student/practice-quizzes' },
           { name: 'Progress', route: '/student/progress' }
         ];
@@ -70,7 +70,7 @@ export default {
         'Manage Students': '👨‍🎓',
         'Upload Content': '📤',
         'Create Exercises': '✏️',
-        'Tutorials': '📚',
+        'View Content': '📚',
         'Practice & Quizzes': '🧠',
         'Progress': '📈'
       };

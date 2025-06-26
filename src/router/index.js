@@ -9,7 +9,7 @@ import Login from '../views/auth/Login.vue'
 
 // Student
 import StudentDashboard from '../views/student/StudentDashboard.vue'
-import Tutorials from '../views/student/Tutorials.vue'
+import ViewContent from '../views/student/ViewContent.vue'
 import PracticeQuizzes from '../views/student/PracticeQuizzes.vue'
 import Progress from '../views/student/Progress.vue'
 
@@ -47,9 +47,9 @@ const routes = [
     meta: { requiresAuth: true, role: 'student' }
   },
   {
-    path: '/student/tutorials',
-    name: 'StudentTutorials',
-    component: Tutorials,
+    path: '/student/view-content',
+    name: 'StudentViewContent',
+    component: ViewContent,
     meta: { requiresAuth: true, role: 'student' }
   },
   {
@@ -210,7 +210,7 @@ router.beforeEach(async (to, from, next) => {
       }
       
       // Additional path validation to ensure users stay within their role boundaries
-      const pathRole = to.path.split('/')[1]; // Extract role from path like /student/tutorials
+      const pathRole = to.path.split('/')[1]; // Extract role from path like /student/view-content
       if (pathRole && pathRole !== userRole && ['student', 'teacher', 'admin'].includes(pathRole)) {
         console.log(`Path role mismatch. User role: ${userRole}, Path role: ${pathRole}. Redirecting to user's dashboard.`);
         next(`/${userRole}`);
