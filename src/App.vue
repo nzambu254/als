@@ -1,3 +1,8 @@
+To achieve the desired layout where the logout button appears below the user's email in the top-right corner, we can adjust the styling of the `.profile-section` and its child elements. I'll also make a few other minor UI adjustments for better spacing and alignment.
+
+Here's the adjusted `App.vue` code:
+
+```vue
 <script setup>
 import { ref, onMounted } from 'vue';
 import { auth, db } from '@/firebase';
@@ -13,15 +18,15 @@ const userRole = ref('');
 // Function to get user role from Firestore (same as in router)
 const getUserRole = async (user) => {
   if (!user) return null;
-  
+
   try {
     const userDoc = await getDoc(doc(db, 'users', user.uid));
-    
+
     if (!userDoc.exists()) {
       console.warn('User document not found in Firestore');
       return null;
     }
-    
+
     const userData = userDoc.data();
     return userData.role || null;
   } catch (error) {
@@ -66,34 +71,27 @@ const handleLogout = async () => {
 
 <template>
   <div class="app-container">
-    <!-- Layout for authenticated users -->
     <div v-if="currentUser" class="authenticated-layout">
-      <!-- Fixed Sidebar -->
       <Sidebar :role="userRole" />
-      
-      <!-- Main content wrapper -->
+
       <div class="main-wrapper">
-        <!-- Header -->
         <header class="app-header">
           <div class="header-content">
             <div class="header-left">
-              <!-- Page title will be updated based on route if needed -->
-            </div>
+              </div>
             <div class="profile-section">
               <span class="user-email">{{ currentUser.email }}</span>
               <button @click="handleLogout" class="logout-btn">Logout</button>
             </div>
           </div>
         </header>
-        
-        <!-- Content Area -->
+
         <main class="content-area">
           <router-view />
         </main>
       </div>
     </div>
-    
-    <!-- Show just router view for non-authenticated pages -->
+
     <router-view v-else />
   </div>
 </template>
@@ -140,30 +138,33 @@ const handleLogout = async () => {
 
 .profile-section {
   display: flex;
-  align-items: center;
-  gap: 1rem;
+  flex-direction: column; /* Stack children vertically */
+  align-items: flex-end; /* Align items to the right */
+  gap: 0.5rem; /* Reduce gap between email and button */
 }
 
 .user-email {
   color: #2c3e50;
   font-size: 0.9rem;
   font-weight: 500;
-  background-color: #cce209;
-  padding: 0.5rem 1rem;
+  background-color: #1be209;
+  padding: 0.4rem 0.8rem; /* Slightly adjust padding */
   border-radius: 20px;
   border: 1px solid #e9ecef;
+  white-space: nowrap; /* Prevent email from wrapping */
 }
 
 .logout-btn {
   background-color: #e74c3c;
   color: white;
   border: none;
-  padding: 0.5rem 1rem;
+  padding: 0.4rem 0.8rem; /* Slightly adjust padding */
   border-radius: 6px;
   cursor: pointer;
-  font-size: 0.9rem;
+  font-size: 0.85rem; /* Slightly smaller font size for button */
   font-weight: 500;
   transition: background-color 0.3s ease;
+  width: fit-content; /* Ensure button width fits its content */
 }
 
 .logout-btn:hover {
@@ -182,13 +183,18 @@ const handleLogout = async () => {
   .main-wrapper {
     margin-left: 0;
   }
-  
+
   .header-content {
     padding: 1rem;
   }
-  
+
   .content-area {
     padding: 1rem;
   }
+
+  .profile-section {
+    align-items: center; /* Center items on smaller screens if preferred, or keep flex-end */
+  }
 }
 </style>
+```
