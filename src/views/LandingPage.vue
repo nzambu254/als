@@ -1,16 +1,16 @@
 <template>
   <div class="landing-page">
-    <header class="hero-section">
-      <div class="hero-content">
-        <h1>Advanced Loci Learning System</h1>
-        <p class="subtitle">Enhancing learning through spatial memory techniques</p>
-        <div class="cta-buttons">
-          <router-link to="/login" class="cta-btn primary">Login</router-link>
-          <router-link to="/login" class="cta-btn secondary">Get Started</router-link>
-        </div>
+    <!-- Intro Section (moved from hero) -->
+    <section class="intro-section">
+      <h1>Advanced Loci Learning System</h1>
+      <p class="subtitle">Enhancing learning through spatial memory techniques</p>
+      <div class="cta-buttons">
+        <router-link to="/login" class="cta-btn primary">Login</router-link>
+        <router-link to="/login" class="cta-btn secondary">Get Started</router-link>
       </div>
-    </header>
+    </section>
 
+    <!-- Features Section -->
     <section class="features-section">
       <h2>Key Features</h2>
       <div class="features-grid">
@@ -32,6 +32,7 @@
       </div>
     </section>
 
+    <!-- About Section -->
     <section class="about-section">
       <div class="about-content">
         <h2>About Our System</h2>
@@ -40,6 +41,7 @@
       </div>
     </section>
 
+    <!-- Footer -->
     <footer class="page-footer">
       <p>© 2025 Advanced Loci Learning System. All rights reserved.</p>
     </footer>
@@ -54,161 +56,129 @@ export default {
 
 <style scoped>
 .landing-page {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-family: 'Segoe UI', sans-serif;
+  line-height: 1.6;
   color: #2c3e50;
+  background: #f9fafe;
 }
 
-.hero-section {
-  background: linear-gradient(135deg, #3498db, #2c3e50);
-  color: white;
-  padding: 4rem 1rem;
+/* Intro Section (replacing blue hero) */
+.intro-section {
   text-align: center;
-  min-height: 60vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  padding: 60px 20px 40px;
+  background: #ffffff;
 }
 
-.hero-content {
-  max-width: 800px;
-  margin: 0 auto;
-}
-
-.hero-section h1 {
-  font-size: 3rem;
-  margin-bottom: 1rem;
+.intro-section h1 {
+  font-size: 2.5rem;
+  margin-bottom: 10px;
 }
 
 .subtitle {
-  font-size: 1.5rem;
-  margin-bottom: 2rem;
-  opacity: 0.9;
+  font-size: 1.2rem;
+  margin-bottom: 30px;
+  color: #555;
 }
 
 .cta-buttons {
   display: flex;
-  gap: 1rem;
   justify-content: center;
-  margin-top: 2rem;
+  gap: 20px;
+  flex-wrap: wrap;
 }
 
 .cta-btn {
-  padding: 0.8rem 1.5rem;
-  border-radius: 4px;
+  padding: 12px 28px;
+  border-radius: 6px;
   text-decoration: none;
-  font-weight: bold;
-  transition: all 0.3s ease;
+  font-size: 1rem;
+  transition: background 0.3s ease;
 }
 
 .cta-btn.primary {
-  background-color: #fff;
-  color: #2c3e50;
+  background: #4a6cf7;
+  color: white;
+  border: none;
 }
 
 .cta-btn.primary:hover {
-  background-color: #f1f1f1;
+  background: #3756d8;
 }
 
 .cta-btn.secondary {
-  background-color: transparent;
-  color: white;
-  border: 2px solid white;
+  background: white;
+  color: #4a6cf7;
+  border: 2px solid #4a6cf7;
 }
 
 .cta-btn.secondary:hover {
-  background-color: rgba(255, 255, 255, 0.1);
+  background: #f0f4ff;
 }
 
+/* Features Section */
 .features-section {
-  padding: 4rem 1rem;
-  max-width: 1200px;
-  margin: 0 auto;
+  padding: 60px 20px;
+  text-align: center;
 }
 
 .features-section h2 {
-  text-align: center;
   font-size: 2rem;
-  margin-bottom: 3rem;
+  margin-bottom: 40px;
 }
 
 .features-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 2rem;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 30px;
+  max-width: 1000px;
+  margin: auto;
 }
 
 .feature-card {
-  background-color: white;
-  border-radius: 8px;
-  padding: 2rem;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  transition: transform 0.3s ease;
+  background: white;
+  padding: 25px;
+  border-radius: 12px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.05);
+  transition: transform 0.2s ease;
 }
 
 .feature-card:hover {
-  transform: translateY(-5px);
+  transform: translateY(-4px);
 }
 
 .feature-icon {
-  font-size: 3rem;
-  margin-bottom: 1rem;
+  font-size: 2rem;
+  margin-bottom: 10px;
 }
 
-.feature-card h3 {
-  font-size: 1.5rem;
-  margin-bottom: 1rem;
-}
-
-.feature-card p {
-  color: #666;
-  line-height: 1.6;
-}
-
+/* About Section */
 .about-section {
-  background-color: #f8f9fa;
-  padding: 4rem 1rem;
+  background: #eef2f7;
+  padding: 60px 20px;
 }
 
 .about-content {
-  max-width: 800px;
-  margin: 0 auto;
+  max-width: 900px;
+  margin: auto;
   text-align: center;
 }
 
-.about-section h2 {
+.about-content h2 {
   font-size: 2rem;
-  margin-bottom: 2rem;
+  margin-bottom: 20px;
 }
 
-.about-section p {
-  margin-bottom: 1rem;
-  line-height: 1.6;
+.about-content p {
+  font-size: 1.1rem;
+  margin-bottom: 15px;
 }
 
+/* Footer */
 .page-footer {
-  background-color: #2c3e50;
-  color: white;
+  background: #1e2a42;
+  color: #ddd;
   text-align: center;
-  padding: 1.5rem;
-  margin-top: 2rem;
-}
-
-@media (max-width: 768px) {
-  .hero-section h1 {
-    font-size: 2.2rem;
-  }
-  
-  .subtitle {
-    font-size: 1.2rem;
-  }
-  
-  .cta-buttons {
-    flex-direction: column;
-    align-items: center;
-  }
-  
-  .cta-btn {
-    width: 80%;
-  }
+  padding: 20px;
+  font-size: 0.9rem;
 }
 </style>
