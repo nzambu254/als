@@ -47,17 +47,14 @@ export default {
           ...baseLinks,
           { name: 'Manage Students', route: '/teacher/manage-students' },
           { name: 'Upload Content', route: '/teacher/upload-content' },
-          { name: 'Create Exercises', route: '/teacher/create-exercises' },
-          { name: 'Announcements', route: '/teacher/announcements' }
+          { name: 'Create Exercises', route: '/teacher/create-exercises' }
         ];
       } else if (this.role === 'student') {
         return [
           ...baseLinks,
           { name: 'Tutorials', route: '/student/tutorials' },
-          { name: 'Practice', route: '/student/practice' },
-          { name: 'Quizzes', route: '/student/quizzes' },
-          { name: 'Progress', route: '/student/progress' },
-          { name: 'Announcements', route: '/student/announcements' }
+          { name: 'Practice & Quizzes', route: '/student/practice-quizzes' },
+          { name: 'Progress', route: '/student/progress' }
         ];
       }
       return baseLinks;
@@ -73,10 +70,8 @@ export default {
         'Manage Students': '👨‍🎓',
         'Upload Content': '📤',
         'Create Exercises': '✏️',
-        'Announcements': '📢',
         'Tutorials': '📚',
-        'Practice': '💪',
-        'Quizzes': '❓',
+        'Practice & Quizzes': '🧠',
         'Progress': '📈'
       };
       return icons[name] || '📄';

@@ -1,7 +1,8 @@
 <script setup>
 import { ref, onMounted } from 'vue';
-import { auth } from '@/firebase';
+import { auth, db } from '@/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
 import { useRouter } from 'vue-router';
 import Sidebar from '@/components/Sidebar.vue';
 
@@ -9,18 +10,46 @@ const router = useRouter();
 const currentUser = ref(null);
 const userRole = ref('');
 
+// Function to get user role from Firestore (same as in router)
+const getUserRole = async (user) => {
+  if (!user) return null;
+  
+  try {
+    const userDoc = await getDoc(doc(db, 'users', user.uid));
+    
+    if (!userDoc.exists()) {
+      console.warn('User document not found in Firestore');
+      return null;
+    }
+    
+    const userData = userDoc.data();
+    return userData.role || null;
+  } catch (error) {
+    console.error('Error fetching user role:', error);
+    return null;
+  }
+};
+
 onMounted(() => {
-  onAuthStateChanged(auth, (user) => {
+  onAuthStateChanged(auth, async (user) => {
     currentUser.value = user;
     if (user) {
-      // Determine user role
-      if (user.email === 'tabithalomuke@gmail.com') {
-        userRole.value = 'admin';
-      } else if (user.email.includes('@teacher.')) {
-        userRole.value = 'teacher';
-      } else {
-        userRole.value = 'student';
+      // Fetch user role from Firestore
+      try {
+        const role = await getUserRole(user);
+        if (role) {
+          userRole.value = role;
+        } else {
+          console.warn('User role not found, logging out');
+          await signOut(auth);
+          router.push('/login');
+        }
+      } catch (error) {
+        console.error('Error fetching user role in App.vue:', error);
+        userRole.value = 'student'; // Fallback
       }
+    } else {
+      userRole.value = '';
     }
   });
 });

@@ -1,6 +1,14 @@
 <template>
   <div class="login-wrapper">
-    <div class="login-container">
+    <!-- Loading overlay for initial auth check -->
+    <div v-if="initialLoading" class="loading-overlay">
+      <div class="loading-container">
+        <div class="loading-spinner-large"></div>
+        <p class="loading-text">Loading...</p>
+      </div>
+    </div>
+    
+    <div v-else class="login-container">
       <!-- Header Section -->
       <div class="login-header">
         <div class="logo-section">
@@ -284,7 +292,8 @@
 import { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
-  sendPasswordResetEmail 
+  sendPasswordResetEmail,
+  onAuthStateChanged 
 } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { auth, db } from '@/firebase';
@@ -293,6 +302,7 @@ export default {
   name: 'LoginView',
   data() {
     return {
+      initialLoading: true,
       isLoginMode: true,
       loading: false,
       error: '',
@@ -309,7 +319,34 @@ export default {
         role: '',
         password: '',
         confirmPassword: ''
+      },
+      authStateListener: null
+    }
+  },
+  async mounted() {
+    // Check if user is already authenticated
+    this.authStateListener = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        try {
+          // User is authenticated, get their role and redirect
+          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            this.redirectUserByRole(userData.role);
+            return;
+          }
+        } catch (error) {
+          console.error('Error fetching user data:', error);
+        }
       }
+      // No user or error occurred, show login form
+      this.initialLoading = false;
+    });
+  },
+  beforeUnmount() {
+    this.loading = false;
+    if (this.authStateListener) {
+      this.authStateListener();
     }
   },
   methods: {
@@ -364,15 +401,16 @@ export default {
         const userData = userDoc.data();
         const userRole = userData.role;
         
-        // Redirect based on role
+        // Redirect based on role - the auth state listener will handle this
+        // But we can also redirect immediately to avoid any delay
         this.redirectUserByRole(userRole);
         
       } catch (err) {
         console.error('Login error:', err);
         this.error = this.getErrorMessage(err.code || err.message || 'auth/unknown');
-      } finally {
         this.loading = false;
       }
+      // Note: loading state will be maintained until redirect happens
     },
 
     async handleRegister() {
@@ -477,7 +515,9 @@ export default {
       };
       
       const route = roleRoutes[role] || '/student'; // Default to student if role not found
-      this.$router.push(route);
+      
+      // Use replace instead of push to avoid going back to login
+      this.$router.replace(route);
     },
 
     getErrorMessage(code) {
@@ -498,10 +538,6 @@ export default {
       
       return errorMessages[code] || code || 'An error occurred. Please try again';
     }
-  },
-
-  beforeUnmount() {
-    this.loading = false;
   }
 }
 </script>
@@ -520,6 +556,42 @@ export default {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   position: relative;
   overflow: hidden;
+}
+
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.loading-spinner-large {
+  width: 48px;
+  height: 48px;
+  border: 4px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: white;
+  animation: spin 1s ease-in-out infinite;
+}
+
+.loading-text {
+  color: white;
+  font-size: 18px;
+  font-weight: 500;
+  margin: 0;
 }
 
 .login-container {
@@ -591,7 +663,6 @@ export default {
   border-radius: 12px;
   padding: 4px;
   margin-bottom: 24px;
-  gap: 4px;
 }
 
 .toggle-btn {

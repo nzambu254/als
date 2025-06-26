@@ -10,17 +10,14 @@ import Login from '../views/auth/Login.vue'
 // Student
 import StudentDashboard from '../views/student/StudentDashboard.vue'
 import Tutorials from '../views/student/Tutorials.vue'
-import Practice from '../views/student/Practice.vue'
-import Quizzes from '../views/student/Quizzes.vue'
+import PracticeQuizzes from '../views/student/PracticeQuizzes.vue'
 import Progress from '../views/student/Progress.vue'
-import AnnouncementsStudent from '../views/student/Announcements.vue'
 
 // Teacher
 import TeacherDashboard from '../views/teacher/TeacherDashboard.vue'
 import ManageStudents from '../views/teacher/ManageStudents.vue'
 import UploadContent from '../views/teacher/UploadContent.vue'
 import CreateExercises from '../views/teacher/CreateExercises.vue'
-import Announcements from '../views/teacher/Announcements.vue'
 
 // Admin
 import AdminDashboard from '../views/admin/AdminDashboard.vue'
@@ -42,7 +39,7 @@ const routes = [
     meta: { hideSidebar: true, requiresGuest: true }
   },
 
-  // Student Routes
+  // Student Routes - Matching sidebar exactly
   {
     path: '/student',
     name: 'StudentDashboard',
@@ -56,15 +53,9 @@ const routes = [
     meta: { requiresAuth: true, role: 'student' }
   },
   {
-    path: '/student/practice',
-    name: 'StudentPractice',
-    component: Practice,
-    meta: { requiresAuth: true, role: 'student' }
-  },
-  {
-    path: '/student/quizzes',
-    name: 'StudentQuizzes',
-    component: Quizzes,
+    path: '/student/practice-quizzes',
+    name: 'StudentPracticeQuizzes',
+    component: PracticeQuizzes,
     meta: { requiresAuth: true, role: 'student' }
   },
   {
@@ -73,14 +64,8 @@ const routes = [
     component: Progress,
     meta: { requiresAuth: true, role: 'student' }
   },
-  {
-    path: '/student/announcements',
-    name: 'StudentAnnouncements',
-    component: AnnouncementsStudent,
-    meta: { requiresAuth: true, role: 'student' }
-  },
 
-  // Teacher Routes - FIXED: ManageStudents should be accessible to teachers
+  // Teacher Routes - Matching sidebar exactly
   {
     path: '/teacher',
     name: 'TeacherDashboard',
@@ -91,7 +76,7 @@ const routes = [
     path: '/teacher/manage-students',
     name: 'ManageStudents',
     component: ManageStudents,
-    meta: { requiresAuth: true, role: 'teacher' } // CHANGED from 'admin' to 'teacher'
+    meta: { requiresAuth: true, role: 'teacher' }
   },
   {
     path: '/teacher/upload-content',
@@ -105,14 +90,8 @@ const routes = [
     component: CreateExercises,
     meta: { requiresAuth: true, role: 'teacher' }
   },
-  {
-    path: '/teacher/announcements',
-    name: 'TeacherAnnouncements',
-    component: Announcements,
-    meta: { requiresAuth: true, role: 'teacher' }
-  },
 
-  // Admin Routes
+  // Admin Routes - Matching sidebar exactly
   {
     path: '/admin',
     name: 'AdminDashboard',
@@ -135,20 +114,6 @@ const routes = [
     path: '/admin/system-maintenance',
     name: 'SystemMaintenance',
     component: SystemMaintenance,
-    meta: { requiresAuth: true, role: 'admin' }
-  },
-
-  // Optional: Add admin access to teacher routes if needed
-  {
-    path: '/admin/manage-students',
-    name: 'AdminManageStudents',
-    component: ManageStudents,
-    meta: { requiresAuth: true, role: 'admin' }
-  },
-  {
-    path: '/admin/announcements',
-    name: 'AdminAnnouncements',
-    component: Announcements,
     meta: { requiresAuth: true, role: 'admin' }
   },
 
@@ -175,7 +140,7 @@ const getCurrentUser = () => {
   });
 };
 
-// Get user role from Firestore (same logic as in Login.vue)
+// Get user role from Firestore
 const getUserRole = async (user) => {
   if (!user) return null;
   
@@ -195,7 +160,7 @@ const getUserRole = async (user) => {
   }
 };
 
-// Navigation guard with proper role checking
+// Enhanced navigation guard with strict role checking
 router.beforeEach(async (to, from, next) => {
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth);
   const requiresGuest = to.matched.some(record => record.meta.requiresGuest);
@@ -204,22 +169,14 @@ router.beforeEach(async (to, from, next) => {
   try {
     const currentUser = await getCurrentUser();
     
-    if (requiresAuth && !currentUser) {
-      // Redirect to login if authentication is required but user is not logged in
-      console.log('Authentication required, redirecting to login');
-      next('/login');
-      return;
-    }
-    
+    // Handle guest-only pages (landing page, login)
     if (requiresGuest && currentUser) {
-      // Redirect to appropriate dashboard if user is logged in but trying to access guest pages
       console.log('User already logged in, redirecting to dashboard');
       const userRole = await getUserRole(currentUser);
       
       if (userRole) {
         next(`/${userRole}`);
       } else {
-        // If role is not found, logout and redirect to login
         console.warn('User role not found, logging out');
         await auth.signOut();
         next('/login');
@@ -227,30 +184,41 @@ router.beforeEach(async (to, from, next) => {
       return;
     }
     
+    // Handle pages that require authentication
+    if (requiresAuth && !currentUser) {
+      console.log('Authentication required, redirecting to login');
+      next('/login');
+      return;
+    }
+    
+    // Handle role-based access control
     if (requiresAuth && requiredRole) {
-      // Check if user has the required role
       const userRole = await getUserRole(currentUser);
       
       if (!userRole) {
-        // If role is not found, logout and redirect to login
         console.warn('User role not found, logging out');
         await auth.signOut();
         next('/login');
         return;
       }
       
-      if (userRole === requiredRole) {
-        // User has the correct role, allow access
-        next();
-      } else {
-        // User doesn't have the required role, redirect to their dashboard
-        console.log(`Access denied. Required: ${requiredRole}, User has: ${userRole}`);
+      // Strict role checking - users can ONLY access their own role's routes
+      if (userRole !== requiredRole) {
+        console.log(`Access denied. Required: ${requiredRole}, User has: ${userRole}. Redirecting to user's dashboard.`);
         next(`/${userRole}`);
+        return;
       }
-      return;
+      
+      // Additional path validation to ensure users stay within their role boundaries
+      const pathRole = to.path.split('/')[1]; // Extract role from path like /student/tutorials
+      if (pathRole && pathRole !== userRole && ['student', 'teacher', 'admin'].includes(pathRole)) {
+        console.log(`Path role mismatch. User role: ${userRole}, Path role: ${pathRole}. Redirecting to user's dashboard.`);
+        next(`/${userRole}`);
+        return;
+      }
     }
     
-    // No special requirements, allow access
+    // Allow access if all checks pass
     next();
     
   } catch (error) {
@@ -263,6 +231,13 @@ router.beforeEach(async (to, from, next) => {
 // Handle router errors
 router.onError((error) => {
   console.error('Router error:', error);
+});
+
+// Add navigation failure handling
+router.afterEach((to, from, failure) => {
+  if (failure) {
+    console.error('Navigation failed:', failure);
+  }
 });
 
 export default router
