@@ -1,92 +1,49 @@
 <template>
   <div class="upload-content-container">
     <h2>Upload Content</h2>
-    
-    <div class="upload-options">
-      <div class="upload-card" @click="showUploadModal('tutorial')">
-        <div class="upload-icon">📚</div>
-        <h3>Tutorial</h3>
-        <p>Upload learning materials and resources</p>
-      </div>
-      
-      <div class="upload-card" @click="showUploadModal('exercise')">
-        <div class="upload-icon">✍️</div>
-        <h3>Exercise</h3>
-        <p>Create practice exercises</p>
-      </div>
-      
-      <div class="upload-card" @click="showUploadModal('quiz')">
-        <div class="upload-icon">📝</div>
-        <h3>Quiz</h3>
-        <p>Create assessments</p>
-      </div>
+
+    <div class="upload-form-card">
+      <form @submit.prevent="handleUpload">
+        <div class="form-group">
+          <label>Content Type</label>
+          <select v-model="uploadData.type" required>
+            <option value="">Select Type</option>
+            <option value="note">Notes</option>
+            <option value="exercise">Exercise</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Title</label>
+          <input v-model="uploadData.title" required />
+        </div>
+
+        <div class="form-group">
+          <label>Description</label>
+          <textarea v-model="uploadData.description" required></textarea>
+        </div>
+
+        <div v-if="uploadData.type === 'exercise'" class="form-group">
+          <label>Difficulty Level</label>
+          <select v-model="uploadData.difficulty" required>
+            <option value="">Select Difficulty</option>
+            <option value="Beginner">Beginner</option>
+            <option value="Intermediate">Intermediate</option>
+            <option value="Advanced">Advanced</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>File (Optional)</label>
+          <input type="file" ref="fileInput" @change="handleFileChange" />
+        </div>
+
+        <button type="submit" :disabled="uploading">
+          {{ uploading ? 'Uploading...' : 'Upload Content' }}
+        </button>
+      </form>
     </div>
-    
-    <!-- Upload Modal -->
-    <div v-if="showModal" class="modal-overlay">
-      <div class="modal-content">
-        <button class="close-modal" @click="closeModal">×</button>
-        
-        <h3>{{ modalTitle }}</h3>
-        
-        <form @submit.prevent="handleUpload">
-          <div class="form-group">
-            <label>Title</label>
-            <input v-model="uploadData.title" required>
-          </div>
-          
-          <div class="form-group">
-            <label>Description</label>
-            <textarea v-model="uploadData.description" required></textarea>
-          </div>
-          
-          <div class="form-group">
-            <label>Subject</label>
-            <select v-model="uploadData.subject" required>
-              <option value="">Select Subject</option>
-              <option v-for="subject in subjects" :key="subject" :value="subject">
-                {{ subject }}
-              </option>
-            </select>
-          </div>
-          
-          <div v-if="currentUploadType === 'exercise'" class="form-group">
-            <label>Difficulty Level</label>
-            <select v-model="uploadData.difficulty" required>
-              <option value="">Select Difficulty</option>
-              <option value="Beginner">Beginner</option>
-              <option value="Intermediate">Intermediate</option>
-              <option value="Advanced">Advanced</option>
-            </select>
-          </div>
-          
-          <div v-if="currentUploadType === 'quiz'" class="form-group">
-            <label>Duration (minutes)</label>
-            <input type="number" v-model="uploadData.duration" min="1" required>
-          </div>
-          
-          <div class="form-group">
-            <label>File</label>
-            <input type="file" ref="fileInput" @change="handleFileChange" required>
-          </div>
-          
-          <div class="form-group">
-            <label>Target Class</label>
-            <select v-model="uploadData.targetClass" required>
-              <option value="all">All Classes</option>
-              <option v-for="classItem in classes" :key="classItem" :value="classItem">
-                {{ classItem }}
-              </option>
-            </select>
-          </div>
-          
-          <button type="submit" :disabled="uploading">
-            {{ uploading ? 'Uploading...' : 'Upload' }}
-          </button>
-        </form>
-      </div>
-    </div>
-    
+
     <div v-if="uploadSuccess" class="success-message">
       Content uploaded successfully!
     </div>
@@ -95,61 +52,41 @@
 </template>
 
 <script>
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, addDoc } from 'firebase/firestore';
 import { db, storage } from '@/firebase';
+import { getAuth } from 'firebase/auth';
 
 export default {
   name: 'UploadContent',
   data() {
     return {
-      showModal: false,
-      currentUploadType: '',
       uploading: false,
       uploadSuccess: false,
       error: '',
       uploadData: {
         title: '',
         description: '',
-        subject: '',
         difficulty: '',
-        duration: 30,
-        targetClass: 'all',
-        file: null
-      },
-      subjects: ['Math', 'Science', 'Language Arts', 'History', 'Computer Science'],
-      classes: ['Class A', 'Class B', 'Class C', 'Class D']
-    }
-  },
-  computed: {
-    modalTitle() {
-      return `Upload ${this.currentUploadType.charAt(0).toUpperCase() + this.currentUploadType.slice(1)}`;
-    }
+        file: null,
+        type: ''
+      }
+    };
   },
   methods: {
-    showUploadModal(type) {
-      this.currentUploadType = type;
-      this.resetUploadData();
-      this.showModal = true;
-      this.uploadSuccess = false;
-      this.error = '';
-    },
-    closeModal() {
-      this.showModal = false;
-    },
     resetUploadData() {
       this.uploadData = {
         title: '',
         description: '',
-        subject: '',
         difficulty: '',
-        duration: 30,
-        targetClass: 'all',
-        file: null
+        file: null,
+        type: ''
       };
       if (this.$refs.fileInput) {
         this.$refs.fileInput.value = '';
       }
+      this.uploadSuccess = false;
+      this.error = '';
     },
     handleFileChange(event) {
       this.uploadData.file = event.target.files[0];
@@ -157,156 +94,202 @@ export default {
     async handleUpload() {
       this.uploading = true;
       this.error = '';
-      
+      this.uploadSuccess = false;
+
+      const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+      const authInstance = getAuth();
+
       try {
-        // 1. Upload file to storage
-        const fileRef = ref(storage, `${this.currentUploadType}s/${Date.now()}_${this.uploadData.file.name}`);
-        await uploadBytes(fileRef, this.uploadData.file);
-        const fileUrl = await getDownloadURL(fileRef);
-        
-        // 2. Create document in Firestore
+        let fileUrl = null;
+        if (this.uploadData.file) {
+          const filePath = `artifacts/${appId}/public/content_files/${Date.now()}_${this.uploadData.file.name}`;
+          const fileRef = storageRef(storage, filePath);
+          await uploadBytes(fileRef, this.uploadData.file);
+          fileUrl = await getDownloadURL(fileRef);
+        }
+
         const docData = {
           title: this.uploadData.title,
           description: this.uploadData.description,
-          subject: this.uploadData.subject,
-          targetClass: this.uploadData.targetClass,
-          fileUrl,
+          fileUrl: fileUrl,
           createdAt: new Date(),
-          createdBy: this.$store.state.user.uid
+          createdBy: authInstance.currentUser ? authInstance.currentUser.uid : 'anonymous',
+          type: this.uploadData.type
         };
-        
-        if (this.currentUploadType === 'exercise') {
+
+        if (this.uploadData.type === 'exercise') {
           docData.difficulty = this.uploadData.difficulty;
         }
-        
-        if (this.currentUploadType === 'quiz') {
-          docData.duration = this.uploadData.duration;
-          docData.questions = []; // Will be added later
-        }
-        
-        await addDoc(collection(db, `${this.currentUploadType}s`), docData);
-        
+
+        await addDoc(collection(db, `artifacts/${appId}/public/data/${this.uploadData.type}s`), docData);
+
         this.uploadSuccess = true;
-        this.closeModal();
+        this.resetUploadData();
         setTimeout(() => {
           this.uploadSuccess = false;
         }, 3000);
       } catch (err) {
         this.error = 'Upload failed. Please try again.';
-        console.error(err);
+        console.error('Upload error:', err);
       } finally {
         this.uploading = false;
       }
     }
   }
-}
+};
 </script>
 
 <style scoped>
 .upload-content-container {
-  padding: 20px;
+  padding: 30px;
+  font-family: 'Inter', sans-serif;
+  background-color: #f8f9fa;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
-.upload-options {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 20px;
+
+h2 {
+  color: #333;
+  margin-bottom: 30px;
+  text-align: center;
+  font-size: 2.5em;
+  font-weight: 700;
+  padding-bottom: 15px;
+  border-bottom: 2px solid #eee;
+  width: 100%;
+  max-width: 900px;
+}
+
+.upload-form-card {
+  background-color: white;
+  padding: 35px;
+  border-radius: 12px;
+  width: 95%;
+  max-width: 650px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
   margin-top: 30px;
 }
-.upload-card {
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  padding: 20px;
-  text-align: center;
-  cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
-}
-.upload-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-}
-.upload-icon {
-  font-size: 2.5em;
-  margin-bottom: 10px;
-}
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0,0,0,0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-.modal-content {
-  background-color: white;
-  padding: 25px;
-  border-radius: 8px;
-  width: 90%;
-  max-width: 600px;
-  max-height: 90vh;
-  overflow-y: auto;
-  position: relative;
-}
-.close-modal {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  font-size: 1.5em;
-  background: none;
-  border: none;
-  cursor: pointer;
-}
+
 .form-group {
-  margin-bottom: 15px;
+  margin-bottom: 20px;
 }
+
 .form-group label {
   display: block;
-  margin-bottom: 5px;
+  margin-bottom: 8px;
   font-weight: bold;
+  color: #555;
 }
+
 .form-group input,
 .form-group textarea,
 .form-group select {
   width: 100%;
-  padding: 8px;
+  padding: 12px;
   box-sizing: border-box;
-  border: 1px solid #ddd;
-  border-radius: 4px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-size: 1.05em;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
+
+.form-group input:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+  border-color: #007bff;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
+}
+
 .form-group textarea {
-  min-height: 100px;
+  min-height: 120px;
+  resize: vertical;
 }
+
 button[type="submit"] {
   background-color: #42b983;
   color: white;
   border: none;
-  padding: 10px 15px;
-  border-radius: 4px;
+  padding: 15px 25px;
+  border-radius: 8px;
   cursor: pointer;
   width: 100%;
-  margin-top: 10px;
+  margin-top: 20px;
+  font-size: 1.2em;
+  font-weight: bold;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
 }
+
+button[type="submit"]:hover {
+  background-color: #36a374;
+  transform: translateY(-2px);
+}
+
 button[type="submit"]:disabled {
   background-color: #cccccc;
   cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
+
 .success-message {
-  color: #00C851;
-  margin-top: 20px;
-  padding: 10px;
-  background-color: #e8f5e9;
-  border-radius: 4px;
+  color: #28a745;
+  margin-top: 30px;
+  padding: 15px;
+  background-color: #d4edda;
+  border-radius: 8px;
   text-align: center;
+  font-size: 1.1em;
+  font-weight: 600;
+  border: 1px solid #c3e6cb;
+  width: 100%;
+  max-width: 650px;
 }
+
 .error {
-  color: #ff4444;
-  margin-top: 20px;
-  padding: 10px;
-  background-color: #ffebee;
-  border-radius: 4px;
+  color: #dc3545;
+  margin-top: 30px;
+  padding: 15px;
+  background-color: #f8d7da;
+  border-radius: 8px;
   text-align: center;
+  font-size: 1.1em;
+  font-weight: 600;
+  border: 1px solid #f5c6cb;
+  width: 100%;
+  max-width: 650px;
+}
+
+@media (max-width: 768px) {
+  h2 {
+    font-size: 2em;
+  }
+  .upload-form-card {
+    padding: 25px;
+  }
+  .form-group input,
+  .form-group textarea,
+  .form-group select {
+    padding: 10px;
+  }
+  button[type="submit"] {
+    padding: 12px 20px;
+    font-size: 1.1em;
+  }
+}
+
+@media (max-width: 480px) {
+  .upload-content-container {
+    padding: 20px 15px;
+  }
+  h2 {
+    font-size: 1.8em;
+  }
+  .upload-form-card {
+    padding: 20px;
+  }
 }
 </style>
