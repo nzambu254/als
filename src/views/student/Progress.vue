@@ -66,12 +66,6 @@
           </ul>
           <p v-else class="no-activity">No recent activity found.</p>
         </div>
-
-        <div class="performance-chart">
-          <h3>Performance Over Time (Last 6 Attempts)</h3>
-          <canvas ref="chartCanvas"></canvas>
-          <p v-if="chartError" class="chart-error-message">{{ chartError }}</p>
-        </div>
       </div>
     </div>
   </div>
@@ -81,7 +75,6 @@
 import { doc, getDoc, collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '@/firebase'; // Your Firestore instance
 import { getAuth, onAuthStateChanged } from 'firebase/auth'; // Firebase Auth
-import Chart from 'chart.js/auto'; // Chart.js library
 
 export default {
   name: 'StudentProgress',
@@ -105,8 +98,6 @@ export default {
       recentActivities: [],
       loading: true,
       error: '',
-      chart: null,
-      chartError: '',
       authStateListener: null, // Listener for Firebase Auth state changes
     }
   },
@@ -127,10 +118,6 @@ export default {
     });
   },
   beforeUnmount() {
-    // Clean up the Chart.js instance to prevent memory leaks
-    if (this.chart) {
-      this.chart.destroy();
-    }
     // Unsubscribe from the auth state listener
     if (this.authStateListener) {
       this.authStateListener();
@@ -140,7 +127,6 @@ export default {
     async fetchProgressData(uid) {
       this.loading = true;
       this.error = '';
-      this.chartError = '';
 
       const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
@@ -170,7 +156,6 @@ export default {
 
         this.totalTutorials = tutorialsTotalSnapshot.size > 0 ? tutorialsTotalSnapshot.size : 1;
         this.totalQuizzes = quizzesTotalSnapshot.size > 0 ? quizzesTotalSnapshot.size : 1;
-
 
         // --- Fetch User's Completed Content and Submissions ---
         const userDoc = await getDoc(doc(db, 'users', uid));
@@ -247,12 +232,6 @@ export default {
             .sort((a, b) => new Date(b.date?.toDate ? b.date.toDate() : b.date) - new Date(a.date?.toDate ? a.date.toDate() : a.date))
             .slice(0, 5);
 
-          // Render chart after data is loaded
-          this.$nextTick(() => {
-            // Pass raw submissions and completed exercises for chart data
-            this.renderChart(userQuizSubmissions, userData.completedExercises);
-          });
-
         } else {
           this.error = 'User profile data not found.';
           console.warn('User document not found for UID:', uid);
@@ -274,136 +253,6 @@ export default {
     truncateText(text, maxLength) {
       if (!text) return 'N/A';
       return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
-    },
-    renderChart(userQuizSubmissions, completedExercises) {
-      if (!this.$refs.chartCanvas) {
-        this.chartError = 'Chart canvas not found.';
-        return;
-      }
-
-      // Destroy existing chart if it exists
-      if (this.chart) {
-        this.chart.destroy();
-      }
-
-      // Prepare data for the chart
-      const quizLabels = [];
-      const quizScores = [];
-      const exerciseCompletionData = [];
-
-      // Get last 6 quiz submissions, sorted by date
-      const sortedQuizSubmissions = userQuizSubmissions
-        .sort((a, b) => new Date(a.submittedAt?.toDate ? a.submittedAt.toDate() : a.submittedAt) - new Date(b.submittedAt?.toDate ? b.submittedAt.toDate() : b.submittedAt))
-        .slice(-6);
-
-      sortedQuizSubmissions.forEach(submission => {
-        const date = submission.submittedAt?.toDate ? submission.submittedAt.toDate() : new Date(submission.submittedAt);
-        quizLabels.push(this.formatDate(date));
-        quizScores.push(Math.round((submission.score / submission.total) * 100)); // Calculate percentage score
-      });
-
-      // For exercise completion, let's use the completion status of the last 6 completed exercises
-      // We'll create a parallel set of labels for exercises if quiz labels aren't sufficient
-      const sortedCompletedExercises = (completedExercises || [])
-        .sort((a, b) => new Date(a.completedAt?.toDate ? a.completedAt.toDate() : a.completedAt) - new Date(b.completedAt?.toDate ? b.completedAt.toDate() : b.completedAt))
-        .slice(-6);
-
-      sortedCompletedExercises.forEach(ex => {
-          // Assuming 'completed' means 100% for this chart's purpose
-          exerciseCompletionData.push(100);
-      });
-
-      // Determine labels for the chart. Prioritize quiz dates if available, otherwise use exercise titles.
-      let labels = quizLabels;
-      if (quizLabels.length === 0 && sortedCompletedExercises.length > 0) {
-          labels = sortedCompletedExercises.map(ex => this.truncateText(ex.title, 15));
-      } else if (quizLabels.length === 0 && sortedCompletedExercises.length === 0) {
-          labels = ['No Data'];
-      }
-
-
-      if (labels[0] === 'No Data' && quizScores.length === 0 && exerciseCompletionData.length === 0) {
-         this.chartError = 'Not enough data to render performance chart.';
-         return;
-      } else {
-        this.chartError = ''; // Clear error if data becomes available
-      }
-
-      const ctx = this.$refs.chartCanvas.getContext('2d');
-      this.chart = new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels: labels,
-          datasets: [
-            {
-              label: 'Quiz Scores (%)',
-              data: quizScores,
-              borderColor: '#8e44ad', // Quizzes color
-              backgroundColor: 'rgba(142, 68, 173, 0.1)',
-              tension: 0.3,
-              fill: true,
-              hidden: quizScores.length === 0 // Hide if no data
-            },
-            {
-              label: 'Exercise Completion (%)',
-              data: exerciseCompletionData,
-              borderColor: '#e09b3d', // Exercises color
-              backgroundColor: 'rgba(224, 155, 61, 0.1)',
-              tension: 0.3,
-              fill: true,
-              hidden: exerciseCompletionData.length === 0 // Hide if no data
-            }
-          ]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: {
-              position: 'top',
-              display: quizScores.length > 0 || exerciseCompletionData.length > 0
-            },
-            tooltip: {
-              callbacks: {
-                label: function(context) {
-                  let label = context.dataset.label || '';
-                  if (label) {
-                    label += ': ';
-                  }
-                  if (context.parsed.y !== null) {
-                    label += context.parsed.y + '%';
-                  }
-                  return label;
-                }
-              }
-            }
-          },
-          scales: {
-            y: {
-              beginAtZero: true,
-              max: 100,
-              title: {
-                display: true,
-                text: 'Percentage'
-              },
-              ticks: {
-                  callback: function(value) {
-                      return value + '%';
-                  }
-              }
-            },
-            x: {
-              title: {
-                display: true,
-                text: 'Recent Attempts'
-              }
-            }
-          }
-        }
-      });
-      if (quizScores.length === 0 && exerciseCompletionData.length === 0) {
-        this.chartError = 'Not enough data to render performance chart. Complete quizzes and exercises to see your progress here.';
-      }
     }
   }
 }
@@ -556,10 +405,9 @@ h2 {
 .tutorials-card .progress-fill { background-color: #3498db; }
 .tutorials-card { border-color: #e0f2f7; } /* Light blue border for tutorials */
 
-
 .progress-details {
   display: grid;
-  grid-template-columns: 1fr 2fr; /* Activity on left, chart on right */
+  grid-template-columns: 1fr; /* Only recent activity now */
   gap: 30px;
 }
 
@@ -621,43 +469,10 @@ h2 {
   font-style: italic;
 }
 
-.performance-chart {
-  background-color: white;
-  border-radius: 12px;
-  padding: 25px;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.05);
-  border: 1px solid #eee;
-  display: flex;
-  flex-direction: column;
-  justify-content: center; /* Center chart vertically if space allows */
-}
-.performance-chart h3 {
-  margin-top: 0;
-  font-size: 1.5em;
-  color: #333;
-  margin-bottom: 20px;
-  border-bottom: 1px solid #f0f0f0;
-  padding-bottom: 10px;
-}
-.performance-chart canvas {
-  max-height: 400px; /* Limit chart height */
-  width: 100% !important; /* Override Chart.js inline styles */
-  height: auto !important; /* Maintain aspect ratio */
-}
-.chart-error-message {
-  text-align: center;
-  color: #e74c3c;
-  font-style: italic;
-  margin-top: 20px;
-}
-
 /* Responsive adjustments */
 @media (max-width: 1024px) {
   .progress-overview {
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  }
-  .progress-details {
-    grid-template-columns: 1fr; /* Stack recent activity and chart */
   }
 }
 
@@ -685,7 +500,7 @@ h2 {
   .progress-percent {
     font-size: 1.1em;
   }
-  .recent-activity h3, .performance-chart h3 {
+  .recent-activity h3 {
     font-size: 1.3em;
   }
   .recent-activity li {
