@@ -196,7 +196,7 @@
               <option value="">Select your role</option>
               <option value="student">Student</option>
               <option value="teacher">Teacher</option>
-              <option value="admin">Admin</option>
+              
             </select>
           </div>
         </div>
