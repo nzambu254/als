@@ -22,6 +22,9 @@
           <option value="draft">Draft</option>
           <option value="archived">Archived</option>
         </select>
+        <button @click="downloadReport" class="download-btn">
+          Download Report (PDF)
+        </button>
       </div>
     </div>
 
@@ -204,14 +207,16 @@
 
 <script>
 import { collection, getDocs, doc, updateDoc, getDoc } from 'firebase/firestore';
-import { db } from '@/firebase'; // Assuming '@/firebase' correctly points to your Firebase initialization
-import { getAuth } from 'firebase/auth'; // Import getAuth to access Firebase Auth directly
+import { db } from '@/firebase';
+import { getAuth } from 'firebase/auth';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 export default {
   name: 'ContentOversight',
   data() {
     return {
-      tabs: ['Notes', 'Exercises'], // Only Notes and Exercises tabs
+      tabs: ['Notes', 'Exercises'],
       activeTab: 'Notes',
       notes: [],
       exercises: [],
@@ -231,7 +236,8 @@ export default {
       },
       processing: false,
       loading: false,
-      error: ''
+      error: '',
+      generatingReport: false
     }
   },
   computed: {
@@ -250,6 +256,9 @@ export default {
         const matchesStatus = !this.selectedStatus || (item.status || 'draft') === this.selectedStatus;
         return matchesSearch && matchesStatus;
       });
+    },
+    currentFilteredItems() {
+      return this.activeTab === 'Notes' ? this.filteredNotes : this.filteredExercises;
     }
   },
   async created() {
@@ -268,7 +277,6 @@ export default {
         // Fetch exercises from the root 'exercises' collection (as they are created by CreateLociExercise component)
         const exercisesSnapshot = await getDocs(collection(db, 'exercises'));
 
-
         // Process notes
         this.notes = await Promise.all(
           notesSnapshot.docs.map(async doc => {
@@ -279,7 +287,6 @@ export default {
               ...data,
               creatorName,
               type: 'note',
-              // Ensure default status if not present
               status: data.status || 'draft'
             };
           })
@@ -295,7 +302,6 @@ export default {
               ...data,
               creatorName,
               type: 'exercise',
-              // Ensure default status if not present
               status: data.status || 'draft'
             };
           })
@@ -319,7 +325,6 @@ export default {
       }
     },
     viewContent(id, type) {
-      // Find the content item
       let content = null;
       switch(type) {
         case 'note':
@@ -334,25 +339,24 @@ export default {
       }
 
       if (content) {
-        this.selectedContent = { ...content }; // Create a shallow copy
+        this.selectedContent = { ...content };
         this.showDetailModal = true;
       } else {
         console.error(`Content with ID ${id} and type ${type} not found.`);
       }
     },
     editContentStatus(item) {
-      // Ensure 'description' is passed to currentContent for the modal display
       this.currentContent = {
         id: item.id,
         type: item.type,
         title: item.title,
         creatorName: item.creatorName,
-        status: item.status || 'draft', // Default to 'draft' if status is missing
-        notes: '', // Clear previous notes
-        description: item.description || '' // Add description
+        status: item.status || 'draft',
+        notes: '',
+        description: item.description || ''
       };
       this.showStatusModal = true;
-      this.showDetailModal = false; // Close detail modal if open
+      this.showDetailModal = false;
     },
     closeStatusModal() {
       this.showStatusModal = false;
@@ -365,30 +369,25 @@ export default {
       this.error = '';
 
       try {
-        // Get the Firebase Auth instance
         const auth = getAuth();
 
         const updateData = {
           status: this.currentContent.status,
           updatedAt: new Date(),
-          updatedBy: auth.currentUser ? auth.currentUser.uid : 'admin' // Use auth.currentUser directly
+          updatedBy: auth.currentUser ? auth.currentUser.uid : 'admin'
         };
 
         if (this.currentContent.notes) {
           updateData.moderatorNotes = this.currentContent.notes;
         }
 
-        // Determine the correct collection path for updating based on the source of the content
         let collectionPath;
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
         if (this.currentContent.type === 'note') {
-          // Notes are from the artifacts path
           collectionPath = `artifacts/${appId}/public/data/notes`;
         } else if (this.currentContent.type === 'exercise') {
-          // Exercises from CreateLociExercise are in the root 'exercises' collection
-          // Assuming exercises from the UploadContent component also exist in the root 'exercises' for simplicity
-          collectionPath = 'exercises'; // Changed to 'exercises' directly
+          collectionPath = 'exercises';
         } else {
             console.error('Unknown content type for update:', this.currentContent.type);
             this.error = 'Unknown content type.';
@@ -401,8 +400,7 @@ export default {
           updateData
         );
 
-        // Update local state by finding the item in the correct array and updating its status
-        const targetCollection = this[this.currentContent.type + 's']; // 'notes' or 'exercises'
+        const targetCollection = this[this.currentContent.type + 's'];
         const index = targetCollection.findIndex(item => item.id === this.currentContent.id);
         if (index !== -1) {
           targetCollection[index].status = this.currentContent.status;
@@ -418,13 +416,107 @@ export default {
     },
     formatDate(timestamp) {
       if (!timestamp) return 'N/A';
-      // Firebase Timestamps have a .toDate() method
       const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
       return date.toLocaleDateString();
     },
     truncateText(text, maxLength) {
       if (!text) return 'N/A';
       return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+    },
+    async downloadReport() {
+      this.generatingReport = true;
+      try {
+        // Create a new PDF document
+        const doc = new jsPDF();
+        
+        // Add title
+        doc.setFontSize(18);
+        doc.text(`Content Oversight Report - ${this.activeTab}`, 14, 20);
+        
+        // Add filters information
+        doc.setFontSize(12);
+        doc.text(`Filters Applied:`, 14, 30);
+        doc.text(`- Search: ${this.searchQuery || 'None'}`, 14, 36);
+        doc.text(`- Status: ${this.selectedStatus || 'All'}`, 14, 42);
+        doc.text(`- Date Generated: ${new Date().toLocaleString()}`, 14, 48);
+        
+        // Prepare table data
+        const headers = this.activeTab === 'Notes' 
+          ? ['Title', 'Description', 'Creator', 'Status', 'Created']
+          : ['Title', 'Description', 'Difficulty', 'Creator', 'Status', 'Created'];
+        
+        const data = this.currentFilteredItems.map(item => {
+          const baseData = [
+            item.title,
+            this.truncateText(item.description, 60),
+            item.creatorName,
+            item.status || 'draft',
+            this.formatDate(item.createdAt)
+          ];
+          
+          if (this.activeTab === 'Exercises') {
+            baseData.splice(2, 0, item.difficulty || 'N/A');
+          }
+          
+          return baseData;
+        });
+        
+        // Add table using autoTable
+        autoTable(doc, {
+          startY: 60,
+          head: [headers],
+          body: data,
+          styles: {
+            fontSize: 9,
+            cellPadding: 3,
+            valign: 'middle'
+          },
+          headStyles: {
+            fillColor: [66, 185, 131],
+            textColor: 255,
+            fontStyle: 'bold'
+          },
+          alternateRowStyles: {
+            fillColor: [240, 240, 240]
+          },
+          columnStyles: {
+            0: { cellWidth: 'auto' },
+            1: { cellWidth: 'auto' },
+            2: { cellWidth: 'auto' },
+            3: { cellWidth: 'auto' },
+            4: { cellWidth: 'auto' },
+            5: { cellWidth: 'auto' }
+          }
+        });
+        
+        // Add summary statistics
+        const finalY = doc.lastAutoTable.finalY || 70;
+        doc.setFontSize(12);
+        doc.text(`Summary Statistics`, 14, finalY + 15);
+        doc.text(`- Total Items: ${this.currentFilteredItems.length}`, 14, finalY + 21);
+        
+        // Status counts
+        const statusCounts = {};
+        this.currentFilteredItems.forEach(item => {
+          const status = item.status || 'draft';
+          statusCounts[status] = (statusCounts[status] || 0) + 1;
+        });
+        
+        let statusY = finalY + 27;
+        Object.entries(statusCounts).forEach(([status, count]) => {
+          doc.text(`- ${status.charAt(0).toUpperCase() + status.slice(1)}: ${count}`, 14, statusY);
+          statusY += 6;
+        });
+        
+        // Save the PDF
+        doc.save(`content_report_${this.activeTab.toLowerCase()}_${new Date().toISOString().slice(0, 10)}.pdf`);
+        
+      } catch (err) {
+        this.error = 'Failed to generate report. Please try again.';
+        console.error('Error generating PDF:', err);
+      } finally {
+        this.generatingReport = false;
+      }
     }
   }
 }
@@ -433,7 +525,7 @@ export default {
 <style scoped>
 .content-oversight-container {
   padding: 20px;
-  font-family: 'Inter', sans-serif; /* Ensuring Inter font */
+  font-family: 'Inter', sans-serif;
 }
 h2 {
   color: #333;
@@ -450,31 +542,31 @@ h2 {
 }
 .content-tabs {
   display: flex;
-  justify-content: center; /* Center the tabs */
+  justify-content: center;
   border-bottom: 1px solid #ddd;
   margin-bottom: 20px;
-  background-color: #ffffff; /* Added background for tabs */
-  border-radius: 8px; /* Rounded corners for tab container */
-  box-shadow: 0 2px 5px rgba(0,0,0,0.05); /* Subtle shadow */
+  background-color: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
   padding: 5px;
 }
 .content-tabs button {
-  padding: 12px 25px; /* Slightly larger padding */
+  padding: 12px 25px;
   background: none;
   border: none;
   border-bottom: 3px solid transparent;
   cursor: pointer;
   font-weight: bold;
   color: #666;
-  transition: all 0.3s ease; /* Smooth transitions */
-  border-radius: 6px; /* Rounded buttons */
+  transition: all 0.3s ease;
+  border-radius: 6px;
   font-size: 1.05em;
 }
 .content-tabs button.active {
   border-bottom-color: #42b983;
   color: #2c3e50;
-  background-color: #e0ffe0; /* Light green background for active tab */
-  box-shadow: 0 2px 8px rgba(66, 185, 131, 0.2); /* Shadow for active tab */
+  background-color: #e0ffe0;
+  box-shadow: 0 2px 8px rgba(66, 185, 131, 0.2);
 }
 .content-tabs button:hover:not(.active) {
   background-color: #f0f0f0;
@@ -482,7 +574,7 @@ h2 {
 .content-controls {
   margin-bottom: 20px;
   display: flex;
-  justify-content: flex-end; /* Align search/filter to the right */
+  justify-content: flex-end;
 }
 .search-filter {
   display: flex;
@@ -492,12 +584,12 @@ h2 {
   border-radius: 8px;
   box-shadow: 0 2px 5px rgba(0,0,0,0.05);
   width: 100%;
-  max-width: 500px; /* Limit width */
+  max-width: 700px;
 }
 .search-filter input,
 .search-filter select {
-  flex: 1; /* Allow flex to grow */
-  padding: 10px; /* Increased padding */
+  flex: 1;
+  padding: 10px;
   border: 1px solid #ddd;
   border-radius: 6px;
   font-size: 1em;
@@ -509,6 +601,21 @@ h2 {
   border-color: #42b983;
   box-shadow: 0 0 0 3px rgba(66, 185, 131, 0.2);
 }
+.download-btn {
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+  white-space: nowrap;
+}
+.download-btn:hover {
+  background-color: #5a6268;
+  transform: translateY(-1px);
+}
 .content-list {
   overflow-x: auto;
   background-color: white;
@@ -518,79 +625,73 @@ h2 {
 }
 table {
   width: 100%;
-  border-collapse: separate; /* Use separate to allow border-radius on cells */
-  border-spacing: 0; /* Remove space between cells */
+  border-collapse: separate;
+  border-spacing: 0;
 }
 th, td {
   padding: 12px 15px;
   text-align: left;
-  border-bottom: 1px solid #eee; /* Lighter border */
+  border-bottom: 1px solid #eee;
 }
 th {
-  background-color: #f8f8f8; /* Very light grey */
-  font-weight: 600; /* Slightly bolder */
+  background-color: #f8f8f8;
+  font-weight: 600;
   color: #444;
-  position: sticky; /* Keep header visible on scroll */
+  position: sticky;
   top: 0;
-  z-index: 1; /* Ensure header is above content */
+  z-index: 1;
 }
-/* Rounded corners for table headers */
 th:first-child { border-top-left-radius: 8px; }
 th:last-child { border-top-right-radius: 8px; }
-/* Remove bottom border for the last row */
 tbody tr:last-child td {
   border-bottom: none;
 }
 .status-badge {
   display: inline-block;
-  padding: 5px 10px; /* More padding */
-  border-radius: 18px; /* More rounded */
-  font-size: 0.85em; /* Slightly larger font */
-  font-weight: 700; /* Bolder */
-  text-transform: capitalize; /* Capitalize status text */
+  padding: 5px 10px;
+  border-radius: 18px;
+  font-size: 0.85em;
+  font-weight: 700;
+  text-transform: capitalize;
 }
 .status-badge.published {
-  background-color: #e6ffed; /* Light green */
-  color: #1a7d3c; /* Darker green text */
+  background-color: #e6ffed;
+  color: #1a7d3c;
   border: 1px solid #b3e6c3;
 }
 .status-badge.draft {
-  background-color: #fff3e0; /* Light orange */
-  color: #e08e00; /* Darker orange text */
+  background-color: #fff3e0;
+  color: #e08e00;
   border: 1px solid #ffe0b3;
 }
 .status-badge.archived {
-  background-color: #e0e0e0; /* Light grey */
-  color: #5a5a5a; /* Darker grey text */
+  background-color: #e0e0e0;
+  color: #5a5a5a;
   border: 1px solid #c0c0c0;
 }
-/* Separate buttons into a column */
 .action-buttons-cell {
   display: flex;
   flex-direction: column;
-  gap: 8px; /* Space between buttons */
-  align-items: flex-start; /* Align buttons to the left */
+  gap: 8px;
+  align-items: flex-start;
 }
-
 .view-btn, .edit-btn {
-  background-color: #3498db; /* Blue for view */
+  background-color: #3498db;
   color: white;
   border: none;
-  padding: 8px 15px; /* Larger buttons */
-  border-radius: 6px; /* More rounded */
+  padding: 8px 15px;
+  border-radius: 6px;
   cursor: pointer;
-  /* Removed margin-right to allow flex-direction to control spacing */
   transition: background-color 0.3s ease, transform 0.2s ease;
   font-weight: 500;
-  width: auto; /* Allow buttons to size naturally */
-  text-align: center; /* Center text within button */
+  width: auto;
+  text-align: center;
 }
 .edit-btn {
-  background-color: #42b983; /* Green for edit */
+  background-color: #42b983;
 }
 .view-btn:hover { background-color: #2980b9; transform: translateY(-1px); }
 .edit-btn:hover { background-color: #36a374; transform: translateY(-1px); }
-
 .file-link {
   color: #3498db;
   text-decoration: none;
@@ -606,7 +707,6 @@ tbody tr:last-child td {
   font-style: italic;
   font-size: 0.9em;
 }
-
 .loading, .error, .empty-state {
   text-align: center;
   padding: 30px;
@@ -625,41 +725,39 @@ tbody tr:last-child td {
 .empty-state {
   color: #777;
 }
-
-/* Modal Styling */
 .modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0,0,0,0.6); /* Darker overlay */
+  background-color: rgba(0,0,0,0.6);
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 1000;
-  backdrop-filter: blur(5px); /* Blurred background */
+  backdrop-filter: blur(5px);
 }
 .modal-content {
   background-color: white;
-  padding: 30px; /* More padding */
-  border-radius: 12px; /* More rounded */
+  padding: 30px;
+  border-radius: 12px;
   width: 95%;
-  max-width: 550px; /* Slightly wider */
+  max-width: 550px;
   position: relative;
-  max-height: 90vh; /* Allow scrolling for tall content */
+  max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 15px 30px rgba(0,0,0,0.25); /* Stronger shadow */
-  animation: modalFadeIn 0.3s ease-out; /* Fade-in animation */
+  box-shadow: 0 15px 30px rgba(0,0,0,0.25);
+  animation: modalFadeIn 0.3s ease-out;
 }
 .detail-modal {
-  max-width: 750px; /* Wider for detail view */
+  max-width: 750px;
 }
 .close-modal {
   position: absolute;
   top: 15px;
   right: 15px;
-  font-size: 2em; /* Larger close button */
+  font-size: 2em;
   background: none;
   border: none;
   cursor: pointer;
@@ -668,7 +766,7 @@ tbody tr:last-child td {
 }
 .close-modal:hover {
   color: #333;
-  transform: rotate(90deg); /* Little spin effect */
+  transform: rotate(90deg);
 }
 .modal-content h3 {
   font-size: 1.8em;
@@ -765,7 +863,7 @@ tbody tr:last-child td {
 .form-actions, .modal-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 15px; /* More space between buttons */
+  gap: 15px;
   margin-top: 30px;
 }
 .cancel-btn, .close-btn {
@@ -803,44 +901,46 @@ tbody tr:last-child td {
   box-shadow: none;
 }
 
-/* Animations */
 @keyframes modalFadeIn {
   from { opacity: 0; transform: translateY(-20px) scale(0.95); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-/* Responsive adjustments */
 @media (max-width: 768px) {
   .content-tabs {
-    flex-wrap: wrap; /* Allow tabs to wrap */
+    flex-wrap: wrap;
     justify-content: center;
   }
   .content-tabs button {
-    flex-grow: 1; /* Make buttons grow to fill space */
-    margin: 5px; /* Add margin between wrapped buttons */
+    flex-grow: 1;
+    margin: 5px;
   }
   .search-filter {
-    flex-direction: column; /* Stack search and filter vertically */
+    flex-direction: column;
     align-items: stretch;
   }
   .search-filter input,
   .search-filter select {
-    flex: none; /* Disable flex growth for stacked inputs */
+    flex: none;
     width: 100%;
+  }
+  .download-btn {
+    width: 100%;
+    white-space: normal;
   }
   th, td {
     padding: 10px;
     font-size: 0.9em;
   }
   .action-buttons-cell {
-    flex-direction: row; /* Keep buttons in a row on smaller screens to save space */
-    flex-wrap: wrap; /* Allow wrapping if space is tight */
+    flex-direction: row;
+    flex-wrap: wrap;
     gap: 5px;
   }
   .view-btn, .edit-btn {
     padding: 6px 10px;
     font-size: 0.85em;
-    flex-grow: 1; /* Allow buttons to grow */
+    flex-grow: 1;
   }
   .modal-content {
     padding: 20px;
