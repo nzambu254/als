@@ -13,6 +13,13 @@
     </div>
 
     <div v-else class="progress-content">
+      <div class="report-actions">
+        <button @click="generatePDF" class="download-btn">
+          <span class="btn-icon">📄</span>
+          Download Progress Report
+        </button>
+      </div>
+
       <div class="progress-overview">
         <div class="progress-card notes-card">
           <h3>Completed Notes</h3>
@@ -73,8 +80,10 @@
 
 <script>
 import { doc, getDoc, collection, getDocs, query, where } from 'firebase/firestore';
-import { db } from '@/firebase'; // Your Firestore instance
-import { getAuth, onAuthStateChanged } from 'firebase/auth'; // Firebase Auth
+import { db } from '@/firebase';
+import { getAuth, onAuthStateChanged } from 'firebase/auth';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 export default {
   name: 'StudentProgress',
@@ -85,7 +94,7 @@ export default {
       completedTutorials: 0,
       completedQuizzes: 0,
 
-      totalNotes: 1, // Default to 1 to avoid division by zero if no notes exist
+      totalNotes: 1,
       totalExercises: 1,
       totalTutorials: 1,
       totalQuizzes: 1,
@@ -98,27 +107,34 @@ export default {
       recentActivities: [],
       loading: true,
       error: '',
-      authStateListener: null, // Listener for Firebase Auth state changes
+      authStateListener: null,
+      userProfile: null,
+      currentDate: new Date().toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      })
     }
   },
   async mounted() {
-    // Listen for auth state changes before fetching data
     const auth = getAuth();
     this.authStateListener = onAuthStateChanged(auth, async (user) => {
       if (user) {
+        this.userProfile = {
+          name: user.displayName || 'Student',
+          email: user.email
+        };
         await this.fetchProgressData(user.uid);
       } else {
         this.loading = false;
         this.error = 'You must be logged in to view your progress.';
-        // Optionally redirect to login page if user is not authenticated
         if (this.$router && this.$router.currentRoute.path !== '/login') {
-           this.$router.push('/login');
+          this.$router.push('/login');
         }
       }
     });
   },
   beforeUnmount() {
-    // Unsubscribe from the auth state listener
     if (this.authStateListener) {
       this.authStateListener();
     }
@@ -131,24 +147,22 @@ export default {
       const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
       try {
-        // --- Fetch Total Counts of Available Content ---
         const [
           notesTotalSnapshot,
           exercisesTotalSnapshot_artifacts,
-          exercisesTotalSnapshot_root, // From CreateLociExercise component
+          exercisesTotalSnapshot_root,
           tutorialsTotalSnapshot,
           quizzesTotalSnapshot
         ] = await Promise.all([
           getDocs(collection(db, `artifacts/${appId}/public/data/notes`)),
           getDocs(collection(db, `artifacts/${appId}/public/data/exercises`)),
-          getDocs(collection(db, 'exercises')), // Main 'exercises' collection
+          getDocs(collection(db, 'exercises')),
           getDocs(collection(db, 'tutorials')),
           getDocs(collection(db, 'quizzes'))
         ]);
 
         this.totalNotes = notesTotalSnapshot.size > 0 ? notesTotalSnapshot.size : 1;
 
-        // Combine exercises from both sources, ensuring uniqueness if they represent the same items
         const combinedExercises = new Set();
         exercisesTotalSnapshot_artifacts.docs.forEach(doc => combinedExercises.add(doc.id));
         exercisesTotalSnapshot_root.docs.forEach(doc => combinedExercises.add(doc.id));
@@ -157,10 +171,7 @@ export default {
         this.totalTutorials = tutorialsTotalSnapshot.size > 0 ? tutorialsTotalSnapshot.size : 1;
         this.totalQuizzes = quizzesTotalSnapshot.size > 0 ? quizzesTotalSnapshot.size : 1;
 
-        // --- Fetch User's Completed Content and Submissions ---
         const userDoc = await getDoc(doc(db, 'users', uid));
-
-        // Fetch quiz submissions for the current user
         const quizSubmissionsQuery = query(collection(db, 'submissions'), where('studentId', '==', uid));
         const quizSubmissionsSnapshot = await getDocs(quizSubmissionsQuery);
         const userQuizSubmissions = quizSubmissionsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -168,25 +179,20 @@ export default {
         if (userDoc.exists()) {
           const userData = userDoc.data();
 
-          // Completed counts from user document
           this.completedNotes = userData.completedNotes?.length || 0;
           this.completedExercises = userData.completedExercises?.length || 0;
           this.completedTutorials = userData.completedTutorials?.length || 0;
 
-          // Completed quizzes based on unique quiz IDs in submissions
           const uniqueCompletedQuizzes = new Set(userQuizSubmissions.map(submission => submission.quizId));
           this.completedQuizzes = uniqueCompletedQuizzes.size;
 
-          // Calculate progress percentages
           this.notesProgress = Math.round((this.completedNotes / this.totalNotes) * 100);
           this.exerciseProgress = Math.round((this.completedExercises / this.totalExercises) * 100);
           this.tutorialProgress = Math.round((this.completedTutorials / this.totalTutorials) * 100);
           this.quizProgress = Math.round((this.completedQuizzes / this.totalQuizzes) * 100);
 
-          // Prepare recent activities (last 5, sorted by date)
           let activities = [];
 
-          // Add notes activities from user data
           (userData.completedNotes || []).forEach(n => {
             activities.push({
               id: n.id,
@@ -196,7 +202,6 @@ export default {
             });
           });
 
-          // Add exercises activities from user data
           (userData.completedExercises || []).forEach(e => {
             activities.push({
               id: e.id,
@@ -206,7 +211,6 @@ export default {
             });
           });
 
-          // Add tutorials activities from user data
           (userData.completedTutorials || []).forEach(t => {
             activities.push({
               id: t.id,
@@ -216,18 +220,16 @@ export default {
             });
           });
 
-          // Add quiz activities from user submissions
           userQuizSubmissions.forEach(submission => {
             activities.push({
-              id: submission.id, // submission ID
+              id: submission.id,
               type: 'Quiz',
               title: submission.quizTitle,
               date: submission.submittedAt,
-              score: Math.round((submission.score / submission.total) * 100) // Calculate percentage score
+              score: Math.round((submission.score / submission.total) * 100)
             });
           });
 
-          // Sort activities by date (most recent first) and take the top 5
           this.recentActivities = activities
             .sort((a, b) => new Date(b.date?.toDate ? b.date.toDate() : b.date) - new Date(a.date?.toDate ? a.date.toDate() : a.date))
             .slice(0, 5);
@@ -245,7 +247,6 @@ export default {
     },
     formatDate(timestamp) {
       if (!timestamp) return 'N/A';
-      // Firebase Timestamps have a .toDate() method, otherwise assume it's already a Date object or string
       const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
       const options = { year: 'numeric', month: 'short', day: 'numeric' };
       return date.toLocaleDateString(undefined, options);
@@ -253,6 +254,102 @@ export default {
     truncateText(text, maxLength) {
       if (!text) return 'N/A';
       return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+    },
+    generatePDF() {
+      // Create a new PDF document
+      const pdf = new jsPDF();
+      
+      // Add logo or header
+      pdf.setFontSize(20);
+      pdf.setTextColor(40);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Learning Progress Report', 105, 20, null, null, 'center');
+      
+      // Add student info
+      pdf.setFontSize(12);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(`Student: ${this.userProfile.name}`, 15, 35);
+      pdf.text(`Email: ${this.userProfile.email}`, 15, 45);
+      pdf.text(`Report Date: ${this.currentDate}`, 15, 55);
+      
+      // Add progress overview section
+      pdf.setFontSize(14);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Progress Overview', 15, 70);
+      
+      // Add progress cards as a table
+      autoTable(pdf, {
+        startY: 75,
+        head: [['Category', 'Completed', 'Total', 'Progress']],
+        body: [
+          ['Notes', this.completedNotes, this.totalNotes, `${this.notesProgress}%`],
+          ['Exercises', this.completedExercises, this.totalExercises, `${this.exerciseProgress}%`],
+          ['Tutorials', this.completedTutorials, this.totalTutorials, `${this.tutorialProgress}%`],
+          ['Quizzes', this.completedQuizzes, this.totalQuizzes, `${this.quizProgress}%`]
+        ],
+        theme: 'grid',
+        headStyles: {
+          fillColor: [41, 128, 185],
+          textColor: 255,
+          fontStyle: 'bold'
+        },
+        alternateRowStyles: {
+          fillColor: [245, 245, 245]
+        },
+        margin: { top: 10 }
+      });
+      
+      // Add recent activity section
+      pdf.setFontSize(14);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Recent Activities', 15, pdf.lastAutoTable.finalY + 20);
+      
+      // Prepare activity data for table
+      const activityData = this.recentActivities.map(activity => [
+        activity.type,
+        activity.title,
+        this.formatDate(activity.date),
+        activity.score ? `${activity.score}%` : 'N/A'
+      ]);
+      
+      autoTable(pdf, {
+        startY: pdf.lastAutoTable.finalY + 25,
+        head: [['Type', 'Title', 'Date', 'Score']],
+        body: activityData,
+        theme: 'grid',
+        headStyles: {
+          fillColor: [41, 128, 185],
+          textColor: 255,
+          fontStyle: 'bold'
+        },
+        columnStyles: {
+          0: { cellWidth: 25 },
+          1: { cellWidth: 70 },
+          2: { cellWidth: 40 },
+          3: { cellWidth: 20 }
+        },
+        styles: {
+          fontSize: 10,
+          cellPadding: 3,
+          overflow: 'linebreak'
+        }
+      });
+      
+      // Add footer
+      const pageCount = pdf.internal.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        pdf.setPage(i);
+        pdf.setFontSize(10);
+        pdf.setTextColor(150);
+        pdf.text(
+          `Page ${i} of ${pageCount}`,
+          pdf.internal.pageSize.width - 30,
+          pdf.internal.pageSize.height - 10
+        );
+      }
+      
+      // Save the PDF
+      pdf.save(`Progress_Report_${this.userProfile.name.replace(' ', '_')}_${new Date().toISOString().slice(0, 10)}.pdf`);
     }
   }
 }
@@ -263,7 +360,7 @@ export default {
   padding: 20px;
   font-family: 'Inter', sans-serif;
   background-color: #f4f7fa;
-  min-height: calc(100vh - 60px); /* Adjust based on your header/footer height */
+  min-height: calc(100vh - 60px);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -288,7 +385,7 @@ h2 {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 60vh; /* Occupy a good portion of the screen */
+  height: 60vh;
   width: 100%;
   text-align: center;
   color: #555;
@@ -323,27 +420,62 @@ h2 {
 
 .progress-content {
   width: 100%;
-  max-width: 1200px; /* Wider content area */
+  max-width: 1200px;
   background-color: #ffffff;
   padding: 40px;
   border-radius: 12px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
 }
 
+.report-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 20px;
+}
+
+.download-btn {
+  background-color: #42b983;
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.download-btn:hover {
+  background-color: #3aa876;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.download-btn:active {
+  transform: translateY(0);
+}
+
+.btn-icon {
+  font-size: 1.2em;
+}
+
 .progress-overview {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); /* More cards, smaller min width */
-  gap: 25px; /* Slightly increased gap */
-  margin-bottom: 40px; /* More space below overview */
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 25px;
+  margin-bottom: 40px;
 }
 
 .progress-card {
-  background-color: #f8fcfb; /* Lighter background */
+  background-color: #f8fcfb;
   border-radius: 12px;
-  padding: 25px; /* More padding */
+  padding: 25px;
   box-shadow: 0 4px 10px rgba(0,0,0,0.05);
   text-align: center;
-  border: 1px solid #e0ffe0; /* Light green border */
+  border: 1px solid #e0ffe0;
   transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
@@ -360,16 +492,16 @@ h2 {
 }
 
 .progress-value {
-  font-size: 3em; /* Larger value */
-  font-weight: 800; /* Bolder value */
+  font-size: 3em;
+  font-weight: 800;
   margin: 10px 0;
-  color: #42b983; /* Green color for values */
-  line-height: 1; /* Tighter line height */
+  color: #42b983;
+  line-height: 1;
 }
 
 .progress-bar {
-  height: 12px; /* Thicker bar */
-  background-color: #e0e0e0; /* Neutral background */
+  height: 12px;
+  background-color: #e0e0e0;
   border-radius: 6px;
   margin: 15px 0;
   overflow: hidden;
@@ -377,37 +509,36 @@ h2 {
 
 .progress-fill {
   height: 100%;
-  background-color: #42b983; /* Green fill */
-  transition: width 0.8s ease-out; /* Slower, smoother transition */
-  border-radius: 6px; /* Match container */
+  background-color: #42b983;
+  transition: width 0.8s ease-out;
+  border-radius: 6px;
 }
 
 .progress-percent {
-  font-size: 1.3em; /* Larger percentage */
-  color: #2c3e50; /* Darker color for percentage */
+  font-size: 1.3em;
+  color: #2c3e50;
   font-weight: bold;
 }
 
-/* Specific colors for different cards */
 .notes-card .progress-value, .notes-card .progress-percent { color: #5a7dcb; }
 .notes-card .progress-fill { background-color: #5a7dcb; }
-.notes-card { border-color: #eaf1ff; } /* Light blue border */
+.notes-card { border-color: #eaf1ff; }
 
 .exercises-card .progress-value, .exercises-card .progress-percent { color: #e09b3d; }
 .exercises-card .progress-fill { background-color: #e09b3d; }
-.exercises-card { border-color: #fff4e0; } /* Light orange border */
+.exercises-card { border-color: #fff4e0; }
 
 .quizzes-card .progress-value, .quizzes-card .progress-percent { color: #8e44ad; }
 .quizzes-card .progress-fill { background-color: #8e44ad; }
-.quizzes-card { border-color: #f7e9ff; } /* Light purple border */
+.quizzes-card { border-color: #f7e9ff; }
 
 .tutorials-card .progress-value, .tutorials-card .progress-percent { color: #3498db; }
 .tutorials-card .progress-fill { background-color: #3498db; }
-.tutorials-card { border-color: #e0f2f7; } /* Light blue border for tutorials */
+.tutorials-card { border-color: #e0f2f7; }
 
 .progress-details {
   display: grid;
-  grid-template-columns: 1fr; /* Only recent activity now */
+  grid-template-columns: 1fr;
   gap: 30px;
 }
 
@@ -433,9 +564,9 @@ h2 {
 }
 .recent-activity li {
   padding: 12px 0;
-  border-bottom: 1px solid #f9f9f9; /* Lighter border */
+  border-bottom: 1px solid #f9f9f9;
   display: grid;
-  grid-template-columns: 90px 1fr 100px auto; /* Adjust column widths */
+  grid-template-columns: 90px 1fr 100px auto;
   gap: 10px;
   align-items: center;
   font-size: 0.95em;
@@ -445,13 +576,13 @@ h2 {
   border-bottom: none;
 }
 .activity-type {
-  font-weight: 700; /* Bolder type */
-  color: #42b983; /* Green for type */
+  font-weight: 700;
+  color: #42b983;
   text-transform: uppercase;
   font-size: 0.85em;
 }
 .activity-title {
-  color: #2c3e50; /* Darker title */
+  color: #2c3e50;
   font-weight: 500;
 }
 .activity-date {
@@ -460,7 +591,7 @@ h2 {
 }
 .activity-score {
   font-weight: bold;
-  color: #3498db; /* Blue for scores */
+  color: #3498db;
 }
 .no-activity {
   text-align: center;
@@ -469,7 +600,6 @@ h2 {
   font-style: italic;
 }
 
-/* Responsive adjustments */
 @media (max-width: 1024px) {
   .progress-overview {
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -488,7 +618,7 @@ h2 {
     padding: 25px;
   }
   .progress-overview {
-    grid-template-columns: 1fr; /* Stack cards vertically on smaller screens */
+    grid-template-columns: 1fr;
     gap: 20px;
   }
   .progress-card {
@@ -504,17 +634,17 @@ h2 {
     font-size: 1.3em;
   }
   .recent-activity li {
-    grid-template-columns: auto 1fr; /* Simpler layout for small screens */
+    grid-template-columns: auto 1fr;
     gap: 5px;
     font-size: 0.9em;
     flex-wrap: wrap;
   }
   .activity-type {
-    width: 100%; /* Take full width */
+    width: 100%;
     text-align: left;
   }
   .activity-date, .activity-score {
-    flex-basis: 48%; /* Take half width */
+    flex-basis: 48%;
     text-align: right;
   }
 }
@@ -540,6 +670,10 @@ h2 {
   }
   .recent-activity li {
     font-size: 0.8em;
+  }
+  .download-btn {
+    padding: 10px 15px;
+    font-size: 0.9em;
   }
 }
 </style>

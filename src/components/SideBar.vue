@@ -53,7 +53,7 @@ export default {
         return [
           ...baseLinks,
           { name: 'View Content', route: '/student/view-content' },
-          { name: 'Practice & Quizzes', route: '/student/practice-quizzes' },
+          { name: 'Quizzes', route: '/student/practice-quizzes' },
           { name: 'Progress', route: '/student/progress' }
         ];
       }

@@ -59,7 +59,12 @@
         </div>
       </div>
 
-      <button @click="submitAnswers" :disabled="submitted">Submit Answers</button>
+      <div class="action-buttons">
+        <button @click="submitAnswers" :disabled="submitted">Submit Answers</button>
+        <button v-if="submitted" @click="generatePDF" class="download-btn">
+          Download Report
+        </button>
+      </div>
 
       <div v-if="submitted" class="results">
         <h3>Your Score: {{ score }}/{{ quiz.questions.length }}</h3>
@@ -73,6 +78,8 @@
 import { db } from '@/firebase';
 import { collection, getDocs, addDoc, query, where } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 
 export default {
   name: 'PracticeQuizzes',
@@ -152,6 +159,97 @@ export default {
       } catch (err) {
         console.error('Failed to save submission:', err);
       }
+    },
+    async generatePDF() {
+      try {
+        // Create a temporary element to generate the PDF content
+        const element = document.createElement('div');
+        element.style.width = '800px';
+        element.style.padding = '20px';
+        element.style.backgroundColor = 'white';
+        
+        // Add title and score
+        const title = document.createElement('h2');
+        title.textContent = `Quiz Report: ${this.quiz.title}`;
+        element.appendChild(title);
+        
+        const score = document.createElement('h3');
+        score.textContent = `Score: ${this.score}/${this.quiz.questions.length}`;
+        element.appendChild(score);
+        
+        // Add each question and its details
+        this.quiz.questions.forEach((question, index) => {
+          const questionBlock = document.createElement('div');
+          questionBlock.style.marginBottom = '20px';
+          questionBlock.style.borderBottom = '1px solid #eee';
+          questionBlock.style.paddingBottom = '15px';
+          
+          const questionTitle = document.createElement('h4');
+          questionTitle.textContent = `Question ${index + 1}`;
+          questionBlock.appendChild(questionTitle);
+          
+          const questionText = document.createElement('p');
+          questionText.textContent = question.text;
+          questionText.style.fontWeight = 'bold';
+          questionBlock.appendChild(questionText);
+          
+          // Add student answer and correctness
+          const studentAnswer = document.createElement('p');
+          const ans = this.studentAnswers[index];
+          let studentAnswerText = 'Not answered';
+          
+          if (question.type === 'multiple-choice' && ans !== null) {
+            studentAnswerText = `Your answer: ${question.options[ans]}`;
+          } else if (question.type === 'true-false' && ans !== null) {
+            studentAnswerText = `Your answer: ${ans}`;
+          }
+          
+          studentAnswer.textContent = studentAnswerText;
+          studentAnswer.style.color = this.isCorrect(index) ? 'green' : 'red';
+          questionBlock.appendChild(studentAnswer);
+          
+          // Add correct answer
+          const correctAnswer = document.createElement('p');
+          let correctAnswerText = '';
+          if (question.type === 'multiple-choice') {
+            correctAnswerText = `Correct answer: ${question.options[question.correctOption]}`;
+          } else {
+            correctAnswerText = `Correct answer: ${question.correctAnswer === 'true' ? 'True' : 'False'}`;
+          }
+          correctAnswer.textContent = correctAnswerText;
+          correctAnswer.style.color = 'green';
+          questionBlock.appendChild(correctAnswer);
+          
+          element.appendChild(questionBlock);
+        });
+        
+        // Add date
+        const date = document.createElement('p');
+        date.textContent = `Report generated on: ${new Date().toLocaleString()}`;
+        date.style.marginTop = '20px';
+        date.style.fontStyle = 'italic';
+        element.appendChild(date);
+        
+        // Append to body (temporarily)
+        document.body.appendChild(element);
+        
+        // Generate PDF
+        const canvas = await html2canvas(element);
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const imgWidth = 210; // A4 width in mm
+        const pageHeight = 295; // A4 height in mm
+        const imgHeight = canvas.height * imgWidth / canvas.width;
+        
+        pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+        pdf.save(`quiz-report-${this.quiz.title}-${new Date().toISOString().slice(0,10)}.pdf`);
+        
+        // Clean up
+        document.body.removeChild(element);
+      } catch (error) {
+        console.error('Error generating PDF:', error);
+        alert('Failed to generate PDF. Please try again.');
+      }
     }
   }
 };
@@ -172,6 +270,11 @@ export default {
 h4 {
   margin-bottom: 10px;
 }
+.action-buttons {
+  display: flex;
+  gap: 15px;
+  margin-top: 20px;
+}
 button {
   padding: 10px 20px;
   background-color: #42b983;
@@ -184,6 +287,9 @@ button {
 button:disabled {
   background-color: #ccc;
   cursor: not-allowed;
+}
+.download-btn {
+  background-color: #2c3e50;
 }
 .results {
   margin-top: 20px;

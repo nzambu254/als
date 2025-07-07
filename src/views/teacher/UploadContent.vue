@@ -15,12 +15,12 @@
 
         <div class="form-group">
           <label>Title</label>
-          <input v-model="uploadData.title" required />
+          <input v-model="uploadData.title" placeholder="Enter content title" required />
         </div>
 
         <div class="form-group">
           <label>Description</label>
-          <textarea v-model="uploadData.description" required></textarea>
+          <textarea v-model="uploadData.description" placeholder="Enter detailed description" required></textarea>
         </div>
 
         <div v-if="uploadData.type === 'exercise'" class="form-group">
@@ -33,28 +33,39 @@
           </select>
         </div>
 
-        <div class="form-group">
-          <label>File (Optional)</label>
-          <input type="file" ref="fileInput" @change="handleFileChange" />
-        </div>
-
-        <button type="submit" :disabled="uploading">
+        <button type="submit" :disabled="uploading" class="submit-button">
           {{ uploading ? 'Uploading...' : 'Upload Content' }}
+          <span v-if="uploading" class="spinner"></span>
         </button>
       </form>
     </div>
 
-    <div v-if="uploadSuccess" class="success-message">
-      Content uploaded successfully!
-    </div>
-    <div v-if="error" class="error">{{ error }}</div>
+    <transition name="fade">
+      <div v-if="uploadSuccess" class="toast-success">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+          <polyline points="22 4 12 14.01 9 11.01"></polyline>
+        </svg>
+        Content uploaded successfully!
+      </div>
+    </transition>
+
+    <transition name="fade">
+      <div v-if="error" class="toast-error">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="12"></line>
+          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+        {{ error }}
+      </div>
+    </transition>
   </div>
 </template>
 
 <script>
-import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, addDoc } from 'firebase/firestore';
-import { db, storage } from '@/firebase';
+import { db } from '@/firebase';
 import { getAuth } from 'firebase/auth';
 
 export default {
@@ -68,7 +79,6 @@ export default {
         title: '',
         description: '',
         difficulty: '',
-        file: null,
         type: ''
       }
     };
@@ -79,17 +89,9 @@ export default {
         title: '',
         description: '',
         difficulty: '',
-        file: null,
         type: ''
       };
-      if (this.$refs.fileInput) {
-        this.$refs.fileInput.value = '';
-      }
-      this.uploadSuccess = false;
       this.error = '';
-    },
-    handleFileChange(event) {
-      this.uploadData.file = event.target.files[0];
     },
     async handleUpload() {
       this.uploading = true;
@@ -100,18 +102,9 @@ export default {
       const authInstance = getAuth();
 
       try {
-        let fileUrl = null;
-        if (this.uploadData.file) {
-          const filePath = `artifacts/${appId}/public/content_files/${Date.now()}_${this.uploadData.file.name}`;
-          const fileRef = storageRef(storage, filePath);
-          await uploadBytes(fileRef, this.uploadData.file);
-          fileUrl = await getDownloadURL(fileRef);
-        }
-
         const docData = {
           title: this.uploadData.title,
           description: this.uploadData.description,
-          fileUrl: fileUrl,
           createdAt: new Date(),
           createdBy: authInstance.currentUser ? authInstance.currentUser.uid : 'anonymous',
           type: this.uploadData.type
@@ -141,8 +134,8 @@ export default {
 
 <style scoped>
 .upload-content-container {
-  padding: 30px;
-  font-family: 'Inter', sans-serif;
+  padding: 40px 20px;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   background-color: #f8f9fa;
   min-height: 100vh;
   display: flex;
@@ -151,145 +144,176 @@ export default {
 }
 
 h2 {
-  color: #333;
+  color: #2c3e50;
   margin-bottom: 30px;
   text-align: center;
-  font-size: 2.5em;
-  font-weight: 700;
-  padding-bottom: 15px;
-  border-bottom: 2px solid #eee;
+  font-size: 2.2rem;
+  font-weight: 600;
   width: 100%;
-  max-width: 900px;
+  max-width: 800px;
 }
 
 .upload-form-card {
   background-color: white;
-  padding: 35px;
-  border-radius: 12px;
-  width: 95%;
-  max-width: 650px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-  margin-top: 30px;
+  padding: 40px;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 600px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  margin-top: 20px;
 }
 
 .form-group {
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .form-group label {
   display: block;
-  margin-bottom: 8px;
-  font-weight: bold;
-  color: #555;
+  margin-bottom: 10px;
+  font-weight: 500;
+  color: #4a5568;
+  font-size: 0.95rem;
 }
 
 .form-group input,
 .form-group textarea,
 .form-group select {
   width: 100%;
-  padding: 12px;
+  padding: 14px 16px;
   box-sizing: border-box;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  font-size: 1.05em;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+  background-color: #f8fafc;
 }
 
 .form-group input:focus,
 .form-group textarea:focus,
 .form-group select:focus {
-  border-color: #007bff;
+  border-color: #4299e1;
   outline: none;
-  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
+  box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.15);
+  background-color: white;
+}
+
+.form-group input::placeholder,
+.form-group textarea::placeholder {
+  color: #a0aec0;
 }
 
 .form-group textarea {
-  min-height: 120px;
+  min-height: 140px;
   resize: vertical;
+  line-height: 1.5;
 }
 
-button[type="submit"] {
-  background-color: #42b983;
+.submit-button {
+  background-color: #4299e1;
   color: white;
   border: none;
-  padding: 15px 25px;
-  border-radius: 8px;
+  padding: 16px 24px;
+  border-radius: 10px;
   cursor: pointer;
   width: 100%;
-  margin-top: 20px;
-  font-size: 1.2em;
-  font-weight: bold;
-  transition: background-color 0.3s ease, transform 0.2s ease;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  margin-top: 10px;
+  font-size: 1rem;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
-button[type="submit"]:hover {
-  background-color: #36a374;
-  transform: translateY(-2px);
+.submit-button:hover {
+  background-color: #3182ce;
+  transform: translateY(-1px);
 }
 
-button[type="submit"]:disabled {
-  background-color: #cccccc;
+.submit-button:disabled {
+  background-color: #a0aec0;
   cursor: not-allowed;
   transform: none;
-  box-shadow: none;
 }
 
-.success-message {
-  color: #28a745;
-  margin-top: 30px;
-  padding: 15px;
-  background-color: #d4edda;
-  border-radius: 8px;
-  text-align: center;
-  font-size: 1.1em;
-  font-weight: 600;
-  border: 1px solid #c3e6cb;
-  width: 100%;
-  max-width: 650px;
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: white;
+  animation: spin 1s ease-in-out infinite;
 }
 
-.error {
-  color: #dc3545;
-  margin-top: 30px;
-  padding: 15px;
-  background-color: #f8d7da;
-  border-radius: 8px;
-  text-align: center;
-  font-size: 1.1em;
-  font-weight: 600;
-  border: 1px solid #f5c6cb;
-  width: 100%;
-  max-width: 650px;
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.toast-success,
+.toast-error {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 16px 24px;
+  border-radius: 10px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+}
+
+.toast-success {
+  background-color: #48bb78;
+  color: white;
+}
+
+.toast-error {
+  background-color: #f56565;
+  color: white;
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(20px);
 }
 
 @media (max-width: 768px) {
-  h2 {
-    font-size: 2em;
-  }
   .upload-form-card {
-    padding: 25px;
+    padding: 30px;
   }
-  .form-group input,
-  .form-group textarea,
-  .form-group select {
-    padding: 10px;
-  }
-  button[type="submit"] {
-    padding: 12px 20px;
-    font-size: 1.1em;
+  
+  h2 {
+    font-size: 1.8rem;
   }
 }
 
 @media (max-width: 480px) {
   .upload-content-container {
-    padding: 20px 15px;
+    padding: 30px 15px;
   }
-  h2 {
-    font-size: 1.8em;
-  }
+  
   .upload-form-card {
-    padding: 20px;
+    padding: 25px 20px;
+  }
+  
+  .form-group input,
+  .form-group textarea,
+  .form-group select {
+    padding: 12px 14px;
+  }
+  
+  .submit-button {
+    padding: 14px 20px;
   }
 }
 </style>
